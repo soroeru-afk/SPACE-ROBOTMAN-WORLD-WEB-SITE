@@ -1,0 +1,366 @@
+@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap");
+@import "tailwindcss";
+
+/* SPACE ROBOTMAN WORLD: ULTIMATE STEEL & MOTION (v9) */
+:root {
+  --bg-dark: #1a1a1a;
+  --base-gray: #2a2a2a;
+  --metal-base: #4a4a4a;
+  --metal-highlight: #999;
+  --metal-shadow: #111;
+  --accent-cyan: #00ffff;
+  --emerald-primary: #00ede8;
+  --emerald-dim: #00817e;
+  --emerald-glow: rgba(0, 237, 232, 0.2);
+  --emerald-diffuse: rgba(0, 237, 232, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-dark);
+  color: #e0fcfb;
+  font-family: "Share Tech Mono", "Orbitron", monospace;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.starfield {
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  background: radial-gradient(circle at center, #111, #000);
+}
+
+/* 1. ULTIMATE CHASSIS GRID */
+/* 1. MASTER TERMINAL CHASSIS - FULL VIEWPORT */
+.chassis-container {
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  grid-template-rows: 45px 1fr 30px; /* HEADER - CONTENT - FOOTER */
+  background: #111;
+  border: none;
+  box-shadow: none;
+  transition: all 0.5s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.plate {
+  background: #1e1e1e;
+  position: relative;
+}
+
+.chassis-header {
+  grid-row: 1;
+  grid-column: 1 / span 2;
+  background: #111;
+  border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+}
+
+.chassis-footer {
+  grid-row: 3;
+  grid-column: 1 / span 2;
+  background: #111;
+  border-top: 1px solid #333;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 20px;
+  font-size: 10px;
+  color: #666;
+}
+
+.chassis-side {
+  grid-row: 2;
+  background: #181818;
+  border-right: 1px solid #333;
+  width: 240px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 構造パネル除去 (シンプル化) */
+.structural-panel {
+  display: none;
+}
+
+.button-area {
+  position: relative;
+  z-index: 2;
+  padding: 20px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+/* 2. REFINED BRANDING */
+.header-title {
+  color: #eee;
+  font-family: "Orbitron", sans-serif;
+  font-weight: bold;
+  font-size: 14px;
+  letter-spacing: 3px;
+  white-space: nowrap;
+}
+.header-status-line {
+  display: flex;
+  align-items: center;
+}
+.header-sub {
+  color: var(--accent-cyan);
+  font-family: "Share Tech Mono", monospace;
+  font-size: 9px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.brand-primary {
+  font-family: "Orbitron", sans-serif;
+  font-size: 16px;
+  color: #fff;
+  letter-spacing: 0.3em;
+  font-weight: 700;
+}
+.brand-secondary {
+  font-size: 8px;
+  color: var(--emerald-dim);
+  letter-spacing: 0.15em;
+  opacity: 0.6;
+  margin-top: 8px;
+}
+
+/* 3. CONTENT AREA: VIEWER-FIRST HIERARCHY */
+.content-main {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 12px solid #111;
+}
+
+.workspace-well {
+  flex: 1; /* MONITOR TAKES SPACE */
+  padding: 25px;
+}
+
+.sub-nav-row {
+  height: 48px;
+  background: #0c0c0d;
+  border-top: 2px solid #000;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 0 15px;
+  gap: 10px;
+  overflow-x: auto;
+}
+
+/* 4. SQUARE & SOLID BUTTONS: LIGHTROOM-STYLE FLAT-3D */
+/* 4. MECH BUTTON: GOLDEN RULE */
+.mech-btn {
+  position: relative;
+  width: 100%;
+  height: 36px;
+  background: #2a2a2a;
+  border: 1px solid #111;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+  transition: all 0.15s ease;
+  text-decoration: none;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+  color: #bbb;
+}
+
+.mech-btn::before {
+  content: none;
+}
+
+.mech-btn span {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.mech-btn:hover {
+  background: #333;
+  border-color: #444;
+  color: var(--accent-cyan);
+}
+
+.mech-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0.4);
+}
+
+.mech-btn.active {
+  background: #181818;
+  border-color: var(--accent-cyan);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.8);
+  color: var(--accent-cyan);
+}
+
+/* SUB-NAV ROW ADJUSTMENT */
+.sub-nav-row .mech-btn {
+  width: auto;
+  min-width: 80px;
+  margin-bottom: 0;
+}
+
+/* SMALL BUTTON VARIANT for Story etc. */
+.mech-btn.small {
+  width: 60px;
+  height: 22px;
+}
+.mech-btn.small::before {
+  top: 2px;
+  left: 2px;
+  right: 2px;
+  bottom: 2px;
+}
+.mech-btn.small span {
+  font-size: 8px;
+  letter-spacing: 0.5px;
+}
+
+/* 5. MONITOR & MOTION */
+.monitor-recess {
+  background: #000;
+  border: 8px solid #3a3a3a;
+  outline: 2px solid #111;
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 0 40px #000;
+}
+.scanlines {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%);
+  background-size: 100% 3px;
+  pointer-events: none;
+  z-index: 5;
+}
+.status-video {
+  filter: brightness(1.7); /* CINEMATIC VISIBILITY */
+}
+
+/* 6. CINEMATIC RISING INTRO */
+.story-text-line {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 1.8s cubic-bezier(0.19, 1, 0.22, 1);
+  margin-bottom: 22px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: #444;
+}
+.story-text-line.visible {
+  opacity: 1;
+  transform: translateY(0); /* RISING EFFECT */
+  color: #eee;
+}
+
+/* UNIT ARCHIVE STYLING */
+.unit-desc-box {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 20px;
+  font-size: 13px;
+  line-height: 1.8;
+  flex: 1; /* EXPAND TO FILL SPACE */
+  overflow-y: auto;
+  margin-bottom: 20px;
+}
+.desc-en {
+  color: #888;
+  font-style: italic;
+  margin-bottom: 15px;
+}
+.desc-jp {
+  color: #f0f0f0;
+  border-top: 1px solid #333;
+  padding-top: 15px;
+  line-height: 2;
+  font-family: sans-serif;
+}
+
+/* 7. SCROLLBARS */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: #000;
+}
+::-webkit-scrollbar-thumb {
+  background: #222;
+  border: 1px solid #333;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--emerald-dim);
+}
+
+/* CRITICAL DYNAMIC TRANSITIONS */
+#splash-screen,
+#story-screen,
+#boot-screen,
+#dash-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition:
+    opacity 1s,
+    transform 1s cubic-bezier(0.19, 1, 0.22, 1);
+}
+.v-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(1.05);
+}
+
+.archive-box {
+  display: flex;
+  flex: 1;
+  gap: 20px;
+  height: 100%;
+  overflow: hidden;
+}
+.archive-scroller {
+  width: 260px;
+  height: 100%;
+  overflow-y: auto;
+  border-right: 1px solid #222;
+  padding-right: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
