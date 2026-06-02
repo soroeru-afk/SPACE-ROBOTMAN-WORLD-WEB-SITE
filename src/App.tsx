@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 const defaultStoryJp = [
   "人類が星を去り、沈黙した銀河。",
@@ -31,12 +32,18 @@ const defaultStoryStyle = {
   fontFamilyEn: "sans-serif",
   isItalicEn: true,
   marginTop: "30px",
+  fontSizeAbout: "12px",
+  letterSpacingAbout: "0.1em",
+  lineHeightAbout: "2.5",
+  marginBottomAbout: "200px",
+  letterSpacingAboutTitle: "0.05em",
 };
 const defaultAboutLines = [
   "PROJECT: SPACE ROBOTMAN WORLD",
   "CHIEF DESIGNER: GRAPHIC SPACE",
   "VERSION: 3.0 [ESTABLISHED 2003 // REBUILT 2026]"
 ];
+const defaultAboutTitle = "ABOUT GRAPHIC SPACE";
 const defaultCharCats = ["HERITAGE", "VOID", "ENERGY", "SURVEIL", "INDUS", "SPECIAL"];
 const defaultArtCats = ["CONCEPT", "ENVIRON"];
 const defaultMotCats = ["TECH", "RECON"];
@@ -51,7 +58,8 @@ export default function App() {
   const [storyEn, setStoryEn] = useState<string[]>(defaultStoryEn);
   const [storyStyle, setStoryStyle] = useState(defaultStoryStyle);
   const [aboutLines, setAboutLines] = useState<string[]>(defaultAboutLines);
-  const [splashMedia, setSplashMedia] = useState<string>("/placeholder_movie.mp4");
+  const [aboutTitle, setAboutTitle] = useState<string>(defaultAboutTitle);
+  const [splashMedia, setSplashMedia] = useState<string>("assets/motion/grok-video-1abb2451-8444-4d2a-9d86-aca8f39cef9e%20(1).mp4");
   const [splashMode, setSplashMode] = useState<string>("SINGLE"); // SINGLE, RANDOM, SEQUENCE
   const [splashOpacity, setSplashOpacity] = useState<number>(30); // Default to 30% (less transparent than 10%)
   const [playlistExcludes, setPlaylistExcludes] = useState<string[]>([]);
@@ -59,24 +67,26 @@ export default function App() {
   const [charCategories, setCharCategories] = useState<string[]>(defaultCharCats);
   const [artCategories, setArtCategories] = useState<string[]>(defaultArtCats);
   const [motCategories, setMotCategories] = useState<string[]>(defaultMotCats);
+  const [systemLogo, setSystemLogo] = useState<string>("assets/new_image/imageSSS.png");
 
   const [units, setUnits] = useState<any[]>([]);
   const [artSet, setArtSet] = useState<string[]>([]);
   const [motSet, setMotSet] = useState<string[]>([]);
+  const [logoSet, setLogoSet] = useState<string[]>([]);
 
-  const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
+  const [currentVideoIndex, setCurrentVideoIndex] = useState(-1);
 
   const videoPlaylist = useMemo(() => {
     return [
-      ...artSet.map((d) => `assets/new_image/${d}`),
+      ...artSet.filter(d => `assets/new_image/${d}` !== systemLogo).map((d) => `assets/new_image/${d}`),
       ...motSet.map((d) => `assets/motion/${d}`),
       ...units.map((d) => d.file)
-    ].filter(src => (src.endsWith(".mp4") || src.endsWith(".webm")) && !playlistExcludes.includes(src));
+    ].filter(src => (src && (typeof src === 'string') && (src.endsWith(".mp4") || src.endsWith(".webm"))) && !playlistExcludes.includes(src));
   }, [artSet, motSet, units, playlistExcludes]);
 
   const handleVideoEnded = () => {
     if (splashMode === "SEQUENCE") {
-       setCurrentVideoIndex(prev => (prev + 1) % videoPlaylist.length);
+       setCurrentVideoIndex(prev => prev === -1 ? 0 : (prev + 1) % videoPlaylist.length);
     } else if (splashMode === "RANDOM") {
        setCurrentVideoIndex(Math.floor(Math.random() * videoPlaylist.length));
     }
@@ -85,13 +95,17 @@ export default function App() {
   const currentSplashSrc = useMemo(() => {
     if (splashMode === "SINGLE") return splashMedia;
     if (videoPlaylist.length === 0) return splashMedia;
+    if (currentVideoIndex === -1) return splashMedia;
     return videoPlaylist[currentVideoIndex] || splashMedia;
   }, [splashMode, splashMedia, videoPlaylist, currentVideoIndex]);
 
 
   const [bootProgress, setBootProgress] = useState(0);
   const [bootLogs, setBootLogs] = useState<string[]>([]);
-  const [clock, setClock] = useState("00:00:00");
+  const [clock, setClock] = useState("00.00.00");
+  const [clockMode, setClockMode] = useState<"REAL" | "LIMIT">("REAL");
+  const [countdownText, setCountdownText] = useState("");
+  const [countdownTarget] = useState(() => new Date(Date.now() + 500 * 24 * 60 * 60 * 1000));
   const [storyLineIndex, setStoryLineIndex] = useState(-1);
 
   useEffect(() => {
@@ -128,10 +142,12 @@ export default function App() {
           setUnits(data.units || []);
           setArtSet(data.artSet || []);
           setMotSet(data.motSet || []);
+          setLogoSet(data.logoSet || []);
           if (data.storyJp) setStoryJp(data.storyJp);
           if (data.storyEn) setStoryEn(data.storyEn);
           if (data.storyStyle) setStoryStyle({ ...defaultStoryStyle, ...data.storyStyle });
           if (data.aboutLines) setAboutLines(data.aboutLines);
+          if (data.aboutTitle) setAboutTitle(data.aboutTitle);
           if (data.splashMedia) setSplashMedia(data.splashMedia);
           if (data.splashMode) setSplashMode(data.splashMode);
           if (data.splashOpacity !== undefined) setSplashOpacity(data.splashOpacity);
@@ -139,6 +155,7 @@ export default function App() {
           if (data.charCategories) setCharCategories(data.charCategories);
           if (data.artCategories) setArtCategories(data.artCategories);
           if (data.motCategories) setMotCategories(data.motCategories);
+          if (data.systemLogo) setSystemLogo(data.systemLogo);
         }
       })
       .catch((e) => console.error("Could not load data:", e));
@@ -147,11 +164,22 @@ export default function App() {
       const d = new Date();
       setClock(
         d.getHours().toString().padStart(2, "0") +
-          ":" +
+          "." +
           d.getMinutes().toString().padStart(2, "0") +
-          ":" +
+          "." +
           d.getSeconds().toString().padStart(2, "0"),
       );
+
+      const diff = countdownTarget.getTime() - d.getTime();
+      if (diff > 0) {
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+        const mins = Math.floor((diff / 1000 / 60) % 60);
+        const secs = Math.floor((diff / 1000) % 60);
+        setCountdownText(`${days}D ${hours.toString().padStart(2,"0")}.${mins.toString().padStart(2,"0")}.${secs.toString().padStart(2,"0")}`);
+      } else {
+        setCountdownText("00D 00.00.00");
+      }
     }, 1000);
     return () => clearInterval(timer);
   }, []);
@@ -239,6 +267,24 @@ export default function App() {
           (u: any) => u.faction && u.faction.startsWith(activeCharFilter),
         );
 
+  useEffect(() => {
+    if (splashMode === "SEQUENCE" && currentNav === "HOME") {
+      if (!currentSplashSrc.endsWith(".mp4") && !currentSplashSrc.endsWith(".webm")) {
+        const timer = setTimeout(() => {
+          handleVideoEnded();
+        }, 5000); // 5 seconds for images
+        return () => clearTimeout(timer);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSplashSrc, splashMode, currentNav, currentVideoIndex, videoPlaylist]);
+
+  useEffect(() => {
+    if (currentNav === "HOME" && homeVideoRef.current) {
+      homeVideoRef.current.play().catch(e => console.log('Autoplay prevent', e));
+    }
+  }, [currentNav, currentSplashSrc, currentVideoIndex, splashMode]);
+
   const renderDashContent = () => {
     return (
       <>
@@ -249,11 +295,13 @@ export default function App() {
           >
             {currentSplashSrc.endsWith(".mp4") || currentSplashSrc.endsWith(".webm") ? (
               <video
+                ref={homeVideoRef}
                 key={currentSplashSrc}
                 className="absolute inset-0 w-full h-full object-cover"
                 style={{ opacity: splashOpacity / 100 }}
                 autoPlay
                 muted
+                playsInline
                 loop={splashMode === "SINGLE"}
                 onEnded={handleVideoEnded}
                 src={currentSplashSrc}
@@ -303,12 +351,22 @@ export default function App() {
               </div>
               <div
                 className="border-l-2 border-[#333] mt-4"
-                style={{ marginLeft: "30px", paddingLeft: "40px" }}
+                style={{ marginLeft: "30px", paddingLeft: "40px", marginBottom: storyStyle.marginBottomAbout || "200px" }}
               >
-                <h2 className="font-['Orbitron'] text-[16px] text-[#666] mb-[10px]">
-                  ABOUT GRAPHIC SPACE
+                <h2 
+                  className="font-['Orbitron'] text-[16px] text-[#666] mb-[20px]"
+                  style={{ letterSpacing: storyStyle.letterSpacingAboutTitle || "0.05em" }}
+                >
+                  {aboutTitle}
                 </h2>
-                <div className="text-[12px] text-[#555] leading-[2]">
+                <div 
+                  className="text-[#555]"
+                  style={{ 
+                    fontSize: storyStyle.fontSizeAbout || "12px", 
+                    letterSpacing: storyStyle.letterSpacingAbout || "0.1em",
+                    lineHeight: storyStyle.lineHeightAbout || "2.5" 
+                  }}
+                >
                   {aboutLines.map((line, i) => (
                     <div key={i}>{line}</div>
                   ))}
@@ -329,20 +387,37 @@ export default function App() {
                 />
               )}
             </div>
-            <div className="ribbon-scroller h-[120px] bg-[#181818] border-t border-[#333] flex items-center gap-2 overflow-x-auto px-4 py-2 shrink-0">
-              {artSet.map((art) => (
-                <div
-                  key={art}
-                  className={`h-[90%] w-auto flex-shrink-0 cursor-pointer border-2 transition-all ${selectedArt === art ? "border-[var(--accent-cyan)] opacity-100 scale-105" : "border-transparent opacity-50 hover:opacity-100"}`}
-                  onClick={() => setSelectedArt(art)}
-                >
-                  <img
-                    src={`assets/new_image/${art}`}
-                    alt="thumb"
-                    className="h-full w-auto object-cover"
-                  />
-                </div>
-              ))}
+            <div className="relative group">
+              <button 
+                onClick={() => navigateMedia('ART', 'left')}
+                className="absolute left-0 top-0 bottom-0 z-10 bg-black/50 hover:bg-black/80 text-white w-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <ChevronLeft size={32} />
+              </button>
+              <div 
+                ref={artScrollerRef}
+                className="ribbon-scroller h-[120px] bg-[#181818] border-t border-[#333] flex items-center gap-2 overflow-x-auto px-4 py-2 shrink-0 scroll-smooth"
+              >
+                {artSet.filter(d => `assets/new_image/${d}` !== systemLogo).map((art) => (
+                  <div
+                    key={art}
+                    className={`h-[90%] w-auto flex-shrink-0 cursor-pointer border-2 transition-all ${selectedArt === art ? "border-[var(--accent-cyan)] opacity-100 scale-105" : "border-transparent opacity-50 hover:opacity-100"}`}
+                    onClick={() => setSelectedArt(art)}
+                  >
+                    <img
+                      src={`assets/new_image/${art}`}
+                      alt="thumb"
+                      className="h-full w-auto object-cover"
+                    />
+                  </div>
+                ))}
+              </div>
+              <button 
+                onClick={() => navigateMedia('ART', 'right')}
+                className="absolute right-0 top-0 bottom-0 z-10 bg-black/50 hover:bg-black/80 text-white w-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <ChevronRight size={32} />
+              </button>
             </div>
           </div>
         )}
@@ -361,20 +436,37 @@ export default function App() {
                 />
               )}
             </div>
-            <div className="ribbon-scroller h-[120px] bg-[#181818] border-t border-[#333] flex items-center gap-2 overflow-x-auto px-4 py-2 shrink-0">
-              {motSet.map((mot) => (
-                <div
-                  key={mot}
-                  className={`h-[90%] w-auto flex-shrink-0 cursor-pointer border-2 transition-all ${selectedMot === mot ? "border-[var(--accent-cyan)] opacity-100 scale-105" : "border-transparent opacity-50 hover:opacity-100"}`}
-                  onClick={() => setSelectedMot(mot)}
-                >
-                  <video
-                    src={`assets/motion/${mot}`}
-                    muted
-                    className="h-full w-auto object-cover"
-                  />
-                </div>
-              ))}
+            <div className="relative group">
+              <button 
+                onClick={() => navigateMedia('MOT', 'left')}
+                className="absolute left-0 top-0 bottom-0 z-10 bg-black/50 hover:bg-black/80 text-white w-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <ChevronLeft size={32} />
+              </button>
+              <div 
+                ref={motScrollerRef}
+                className="ribbon-scroller h-[120px] bg-[#181818] border-t border-[#333] flex items-center gap-2 overflow-x-auto px-4 py-2 shrink-0 scroll-smooth"
+              >
+                {motSet.map((mot) => (
+                  <div
+                    key={mot}
+                    className={`h-[90%] w-auto flex-shrink-0 cursor-pointer border-2 transition-all ${selectedMot === mot ? "border-[var(--accent-cyan)] opacity-100 scale-105" : "border-transparent opacity-50 hover:opacity-100"}`}
+                    onClick={() => setSelectedMot(mot)}
+                  >
+                    <video
+                      src={`assets/motion/${mot}`}
+                      muted
+                      className="h-full w-auto object-cover"
+                    />
+                  </div>
+                ))}
+              </div>
+              <button 
+                onClick={() => navigateMedia('MOT', 'right')}
+                className="absolute right-0 top-0 bottom-0 z-10 bg-black/50 hover:bg-black/80 text-white w-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <ChevronRight size={32} />
+              </button>
             </div>
           </div>
         )}
@@ -458,6 +550,7 @@ export default function App() {
   const [adminStoryJp, setAdminStoryJp] = useState(storyJp.join("\n\n"));
   const [adminStoryEn, setAdminStoryEn] = useState(storyEn.join("\n\n"));
   const [adminStoryStyle, setAdminStoryStyle] = useState(storyStyle);
+  const [adminAboutTitle, setAdminAboutTitle] = useState(aboutTitle);
   const [adminAboutText, setAdminAboutText] = useState(aboutLines.join("\n"));
   const [adminSplashMedia, setAdminSplashMedia] = useState(splashMedia);
   const [adminSplashMode, setAdminSplashMode] = useState(splashMode);
@@ -480,6 +573,10 @@ export default function App() {
   useEffect(() => {
     setAdminStoryStyle({ ...defaultStoryStyle, ...storyStyle });
   }, [storyStyle]);
+
+  useEffect(() => {
+    setAdminAboutTitle(aboutTitle);
+  }, [aboutTitle]);
 
   useEffect(() => {
     setAdminAboutText(aboutLines.join("\n"));
@@ -506,17 +603,57 @@ export default function App() {
   useEffect(() => { setAdminMotCategories(motCategories.join(", ")); }, [motCategories]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const homeVideoRef = useRef<HTMLVideoElement>(null);
+  const artScrollerRef = useRef<HTMLDivElement>(null);
+  const motScrollerRef = useRef<HTMLDivElement>(null);
+
+  const navigateMedia = (type: 'ART' | 'MOT', direction: 'left' | 'right') => {
+    if (type === 'ART') {
+      const idx = artSet.indexOf(selectedArt);
+      if (idx === -1 && artSet.length > 0) {
+          setSelectedArt(artSet[0]);
+          return;
+      }
+      if (idx === -1) return;
+      let nextIdx = direction === 'left' ? idx - 1 : idx + 1;
+      if (nextIdx < 0) nextIdx = artSet.length - 1;
+      if (nextIdx >= artSet.length) nextIdx = 0;
+      setSelectedArt(artSet[nextIdx]);
+      if (artScrollerRef.current) {
+        const thumb = artScrollerRef.current.children[nextIdx] as HTMLElement;
+        if (thumb) thumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    } else {
+      const idx = motSet.indexOf(selectedMot);
+      if (idx === -1 && motSet.length > 0) {
+          setSelectedMot(motSet[0]);
+          return;
+      }
+      if (idx === -1) return;
+      let nextIdx = direction === 'left' ? idx - 1 : idx + 1;
+      if (nextIdx < 0) nextIdx = motSet.length - 1;
+      if (nextIdx >= motSet.length) nextIdx = 0;
+      setSelectedMot(motSet[nextIdx]);
+      if (motScrollerRef.current) {
+        const thumb = motScrollerRef.current.children[nextIdx] as HTMLElement;
+        if (thumb) thumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    }
+  };
 
   const [customUploadName, setCustomUploadName] = useState("");
 
   const saveAdminData = async (payloadToSave?: any) => {
     setSaveStatusMsg("SAVING...");
     try {
-      const payload = payloadToSave || { 
-        units, artSet, motSet, 
+      const payload = { 
+        units: payloadToSave?.units || units,
+        artSet: payloadToSave?.artSet || artSet,
+        motSet: payloadToSave?.motSet || motSet, 
         storyJp: adminStoryJp.split("\n\n"), 
         storyEn: adminStoryEn.split("\n\n"), 
         storyStyle: adminStoryStyle,
+        aboutTitle: adminAboutTitle,
         aboutLines: adminAboutText.split("\n"),
         splashMedia: adminSplashMedia,
         splashMode: adminSplashMode,
@@ -525,6 +662,8 @@ export default function App() {
         charCategories: adminCharCategories.split(",").map((s) => s.trim()).filter(Boolean),
         artCategories: adminArtCategories.split(",").map((s) => s.trim()).filter(Boolean),
         motCategories: adminMotCategories.split(",").map((s) => s.trim()).filter(Boolean),
+        systemLogo: systemLogo,
+        logoSet: logoSet,
       };
       const res = await fetch("/api/update_data", {
         method: "POST",
@@ -537,6 +676,7 @@ export default function App() {
         setStoryJp(adminStoryJp.split("\n\n"));
         setStoryEn(adminStoryEn.split("\n\n"));
         setStoryStyle(adminStoryStyle);
+        setAboutTitle(adminAboutTitle);
         setAboutLines(adminAboutText.split("\n"));
         setSplashMedia(adminSplashMedia);
         setSplashMode(adminSplashMode);
@@ -574,15 +714,18 @@ export default function App() {
       if (data.success) {
         setUploadMsg("UPLOAD COMPLETE!");
         setCustomUploadName("");
-        let p: any = { units, artSet, motSet };
+        let p: any = { units, artSet, motSet, logoSet };
 
         let newArtSet = [...artSet];
         let newMotSet = [...motSet];
+        let newLogoSet = [...logoSet];
         let newUnits = [...units];
 
         for (const fileData of data.files) {
           if (currentAdminTab === "ART") {
             newArtSet.push(fileData.basename);
+          } else if (currentAdminTab === "LOGO") {
+            newLogoSet.push(fileData.basename);
           } else if (currentAdminTab === "MOTION") {
             newMotSet.push(fileData.basename);
           } else if (currentAdminTab === "CHAR") {
@@ -600,6 +743,9 @@ export default function App() {
         if (currentAdminTab === "ART") {
           setArtSet(newArtSet);
           p.artSet = newArtSet;
+        } else if (currentAdminTab === "LOGO") {
+          setLogoSet(newLogoSet);
+          p.logoSet = newLogoSet;
         } else if (currentAdminTab === "MOTION") {
           setMotSet(newMotSet);
           p.motSet = newMotSet;
@@ -618,12 +764,17 @@ export default function App() {
   };
 
   const deleteAdminItem = (index: number) => {
-    let p: any = { units, artSet, motSet };
+    let p: any = { units, artSet, motSet, logoSet };
     if (currentAdminTab === "ART") {
       const arr = [...artSet];
       arr.splice(index, 1);
       setArtSet(arr);
       p.artSet = arr;
+    } else if (currentAdminTab === "LOGO") {
+      const arr = [...logoSet];
+      arr.splice(index, 1);
+      setLogoSet(arr);
+      p.logoSet = arr;
     } else if (currentAdminTab === "MOTION") {
       const arr = [...motSet];
       arr.splice(index, 1);
@@ -677,6 +828,12 @@ export default function App() {
         src: `assets/new_image/${d}`,
         i,
       }));
+    else if (currentAdminTab === "LOGO")
+      thumbsData = logoSet.map((d, i) => ({
+        f: d,
+        src: `assets/logos/${d}`,
+        i,
+      }));
     else if (currentAdminTab === "MOTION")
       thumbsData = motSet.map((d, i) => ({
         f: d,
@@ -696,16 +853,17 @@ export default function App() {
     return (
       <section
         id="admin-screen"
-        className="fixed inset-0 w-full h-full bg-[#0a0a0a] z-[999] flex flex-col p-[20px] box-border"
+        className="fixed inset-0 w-full h-full bg-[#050505] z-[999] flex justify-center p-4 md:p-8 lg:p-10 box-border overflow-hidden"
       >
-        <header className="flex flex-wrap justify-between items-center border-b border-[#333] pb-[15px] mb-[20px] shrink-0 gap-4">
-          <div className="flex flex-wrap items-center gap-[30px]">
-            <div className="text-[var(--emerald-primary)] font-['Orbitron'] text-[20px] tracking-wide">
+        <div className="w-full max-w-[1600px] h-full flex flex-col min-w-0 bg-[#0a0a0a] border border-[#222] rounded-lg shadow-2xl p-4 sm:p-6 md:p-8">
+          <header className="flex flex-wrap justify-between items-center border-b border-[#333] shrink-0 gap-4 pb-4">
+          <div className="flex flex-wrap items-center gap-[20px] lg:gap-[30px] h-full min-w-0">
+            <div className="text-[var(--emerald-primary)] font-['Orbitron'] text-[20px] md:text-[24px] tracking-wide font-bold shrink-0">
               ADMIN DASHBOARD
             </div>
-            <div className="flex gap-[12px]">
+            <div className="flex flex-wrap gap-[10px] lg:gap-[30px] h-full lg:ml-[20px]">
               <button
-                className={`mech-btn !w-auto px-5 !h-[30px] ${currentAdminTab === "ART" ? "active" : ""}`}
+                className={`border-b-[3px] !w-auto !h-[50px] font-bold text-[13px] uppercase ${currentAdminTab === "ART" ? "border-[var(--emerald-primary)] text-[var(--emerald-primary)]" : "border-transparent text-[#aaa] hover:text-[#fff]"}`}
                 onClick={() => {
                   setCurrentAdminTab("ART");
                   clearCharForm();
@@ -714,25 +872,34 @@ export default function App() {
                 <span>CG ARTWORKS</span>
               </button>
               <button
-                className={`mech-btn !w-auto px-5 !h-[30px] ${currentAdminTab === "CHAR" ? "active" : ""}`}
-                onClick={() => {
-                  setCurrentAdminTab("CHAR");
-                  clearCharForm();
-                }}
-              >
-                <span>UNIT ARCHIVES</span>
-              </button>
-              <button
-                className={`mech-btn !w-auto px-5 !h-[30px] ${currentAdminTab === "MOTION" ? "active" : ""}`}
+                className={`border-b-[3px] !w-auto !h-[50px] font-bold text-[13px] uppercase ${currentAdminTab === "MOTION" ? "border-[var(--emerald-primary)] text-[var(--emerald-primary)]" : "border-transparent text-[#aaa] hover:text-[#fff]"}`}
                 onClick={() => {
                   setCurrentAdminTab("MOTION");
                   clearCharForm();
                 }}
               >
-                <span>MOTION DATA</span>
+                <span>MOVIE DATA</span>
               </button>
               <button
-                className={`mech-btn !w-auto px-5 !h-[30px] ${currentAdminTab === "OVERVIEW" ? "active" : ""}`}
+                className={`border-b-[3px] !w-auto !h-[50px] font-bold text-[13px] uppercase ${currentAdminTab === "CHAR" ? "border-[var(--emerald-primary)] text-[var(--emerald-primary)]" : "border-transparent text-[#aaa] hover:text-[#fff]"}`}
+                onClick={() => {
+                  setCurrentAdminTab("CHAR");
+                  clearCharForm();
+                }}
+              >
+                <span>CAST ROSTER</span>
+              </button>
+              <button
+                className={`border-b-[3px] !w-auto !h-[50px] font-bold text-[13px] uppercase ${currentAdminTab === "LOGO" ? "border-[var(--emerald-primary)] text-[var(--emerald-primary)]" : "border-transparent text-[#aaa] hover:text-[#fff]"}`}
+                onClick={() => {
+                  setCurrentAdminTab("LOGO");
+                  clearCharForm();
+                }}
+              >
+                <span>SYSTEM LOGO</span>
+              </button>
+              <button
+                className={`border-b-[3px] !w-auto !h-[50px] font-bold text-[13px] uppercase ${currentAdminTab === "OVERVIEW" ? "border-[var(--emerald-primary)] text-[var(--emerald-primary)]" : "border-transparent text-[#aaa] hover:text-[#fff]"}`}
                 onClick={() => {
                   setCurrentAdminTab("OVERVIEW");
                   clearCharForm();
@@ -740,29 +907,20 @@ export default function App() {
               >
                 <span>OVERVIEW TEXT</span>
               </button>
-              <button
-                className={`mech-btn !w-auto px-5 !h-[30px] ${currentAdminTab === "HOME_MEDIA" ? "active" : ""}`}
-                onClick={() => {
-                  setCurrentAdminTab("HOME_MEDIA");
-                  clearCharForm();
-                }}
-              >
-                <span>HOME MEDIA</span>
-              </button>
             </div>
           </div>
-          <div className="flex gap-[15px] items-center">
+          <div className="flex flex-wrap gap-[15px] items-center pb-[5px]">
             <span className="text-[var(--accent-cyan)] text-[11px] font-['Orbitron'] font-bold">
               {saveStatusMsg}
             </span>
             <button
-              className="mech-btn !w-auto px-6 !h-[30px] !text-[var(--accent-cyan)] border-[var(--accent-cyan)] hover:bg-[var(--emerald-diffuse)]"
+              className="mech-btn !w-auto px-6 !h-[35px] !text-[var(--emerald-primary)] border-[var(--emerald-primary)] hover:bg-[var(--emerald-diffuse)] font-bold text-[12px]"
               onClick={() => saveAdminData()}
             >
               <span>SAVE JSON DATA</span>
             </button>
             <button
-              className="mech-btn !w-auto px-6 !h-[30px] border-[#555] opacity-80"
+              className="mech-btn !w-auto px-6 !h-[35px] text-[#ccc] border-[#333] bg-[#111] hover:bg-[#222] font-bold text-[12px]"
               onClick={() => {
                 clearCharForm();
                 setCurrentScreen("dash");
@@ -773,7 +931,7 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex-1 flex flex-col gap-[20px] min-h-0">
+        <div className="flex-1 flex min-h-0 mt-[20px]">
           {currentAdminTab === "OVERVIEW" ? (
             <div className="flex-1 flex gap-[20px] p-[10px] pr-[20px] h-full">
               <div className="flex-1 flex flex-col gap-[10px]">
@@ -875,10 +1033,79 @@ export default function App() {
                   onChange={(e) => setAdminStoryEn(e.target.value)}
                 ></textarea>
               </div>
-              <div className="w-[300px] flex flex-col gap-[10px]">
-                <div className="flex justify-between items-center mb-[5px]">
+              <div className="w-[350px] flex flex-col gap-[10px]">
+                <div className="flex flex-col gap-[10px] mb-[5px]">
                   <div className="text-[var(--emerald-primary)] font-['Orbitron'] text-[14px]">
                     ABOUT TEXT
+                  </div>
+                  <div className="flex flex-col gap-[5px]">
+                    <div className="flex items-center gap-[8px]">
+                      <input 
+                        type="text"
+                        className="flex-1 bg-[#111] text-[#ccc] border border-[#333] px-[8px] py-[6px] text-[12px] outline-none min-w-0"
+                        value={adminAboutTitle}
+                        onChange={(e) => setAdminAboutTitle(e.target.value)}
+                        placeholder="Title (e.g. ABOUT GRAPHIC SPACE)"
+                      />
+                      <select
+                        className="bg-[#111] text-[#ccc] border border-[#333] px-[6px] py-[6px] text-[11px] outline-none shrink-0"
+                        value={adminStoryStyle.letterSpacingAboutTitle || "0.05em"}
+                        onChange={(e) => setAdminStoryStyle(prev => ({...prev, letterSpacingAboutTitle: e.target.value}))}
+                      >
+                        <option value="0em">Track (Title): 0</option>
+                        <option value="0.05em">Track (Title): 0.05</option>
+                        <option value="0.1em">Track (Title): 0.1</option>
+                        <option value="0.2em">Track (Title): 0.2</option>
+                        <option value="0.3em">Track (Title): 0.3</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-[8px] mt-[5px]">
+                    <select
+                      className="bg-[#111] text-[#ccc] border border-[#333] px-[6px] py-[4px] text-[11px] outline-none"
+                      value={adminStoryStyle.fontSizeAbout || "12px"}
+                      onChange={(e) => setAdminStoryStyle(prev => ({...prev, fontSizeAbout: e.target.value}))}
+                    >
+                      <option value="10px">Size: 10px</option>
+                      <option value="11px">Size: 11px</option>
+                      <option value="12px">Size: 12px</option>
+                      <option value="13px">Size: 13px</option>
+                      <option value="14px">Size: 14px</option>
+                      <option value="16px">Size: 16px</option>
+                    </select>
+                    <select
+                      className="bg-[#111] text-[#ccc] border border-[#333] px-[6px] py-[4px] text-[11px] outline-none"
+                      value={adminStoryStyle.letterSpacingAbout || "0.1em"}
+                      onChange={(e) => setAdminStoryStyle(prev => ({...prev, letterSpacingAbout: e.target.value}))}
+                    >
+                      <option value="0em">Track: 0</option>
+                      <option value="0.05em">Track: 0.05</option>
+                      <option value="0.1em">Track: 0.1</option>
+                      <option value="0.2em">Track: 0.2</option>
+                      <option value="0.3em">Track: 0.3</option>
+                    </select>
+                    <select
+                      className="bg-[#111] text-[#ccc] border border-[#333] px-[6px] py-[4px] text-[11px] outline-none"
+                      value={adminStoryStyle.lineHeightAbout || "2.5"}
+                      onChange={(e) => setAdminStoryStyle(prev => ({...prev, lineHeightAbout: e.target.value}))}
+                    >
+                      <option value="1.5">Line: 1.5</option>
+                      <option value="2">Line: 2</option>
+                      <option value="2.5">Line: 2.5</option>
+                      <option value="3">Line: 3</option>
+                    </select>
+                    <select
+                      className="bg-[#111] text-[#ccc] border border-[#333] px-[6px] py-[4px] text-[11px] outline-none"
+                      value={adminStoryStyle.marginBottomAbout || "200px"}
+                      onChange={(e) => setAdminStoryStyle(prev => ({...prev, marginBottomAbout: e.target.value}))}
+                    >
+                      <option value="50px">Bot Space: 50px</option>
+                      <option value="100px">Bot Space: 100px</option>
+                      <option value="150px">Bot Space: 150px</option>
+                      <option value="200px">Bot Space: 200px</option>
+                      <option value="250px">Bot Space: 250px</option>
+                      <option value="300px">Bot Space: 300px</option>
+                    </select>
                   </div>
                 </div>
                 <div className="text-[#777] text-[11px] mb-[10px]">
@@ -892,47 +1119,69 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <>
-              {/* TOP HALF: UPLOAD/FORM and GALLERY */}
-              <div className="flex h-[280px] gap-[20px] shrink-0">
-                {/* UPLOAD / FORM / CONTROLS */}
-                <div className="w-[320px] flex flex-col gap-[12px] overflow-y-auto pr-[5px]">
-                  <div
-                    className="h-[120px] shrink-0 border-2 border-dashed border-[#444] bg-[#111] flex flex-col items-center justify-center text-center text-[#777] cursor-pointer p-[15px] box-border hover:border-[var(--emerald-primary)] transition-colors"
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      if (e.dataTransfer.files.length)
-                        handleUpload(e.dataTransfer.files);
-                    }}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <div className="font-['Orbitron'] text-[16px] mb-[5px] text-[var(--emerald-primary)]">
-                      DRAG & DROP
-                    </div>
-                    <div className="text-[11px]">Click or drop media here</div>
-                    <input
-                      type="file"
-                      multiple
-                      ref={fileInputRef}
-                      className="hidden"
-                      onChange={(e) => {
-                        if (e.target.files?.length) handleUpload(e.target.files);
-                      }}
-                    />
+            <div className="flex gap-[20px] w-full h-full min-h-0 pb-4">
+              {/* LEFT SIDEBAR: UPLOAD/FORM */}
+              <div className="w-[300px] border-r border-[#333] flex flex-col gap-[20px] pr-[20px] overflow-y-auto shrink-0">
+                <div className="flex flex-col gap-[8px]">
+                  <div className="text-[var(--emerald-primary)] font-['Orbitron'] font-bold text-[10px] tracking-wide uppercase">Target Category</div>
+                  <div className="bg-[#151515] text-[#ccc] border border-[#333] p-[10px] text-[13px] font-bold font-mono tracking-widest select-none">
+                    {currentAdminTab === "ART" && "CG ARTWORKS"}
+                    {currentAdminTab === "MOTION" && "MOVIE DATA"}
+                    {currentAdminTab === "CHAR" && "CAST ROSTER"}
+                    {currentAdminTab === "LOGO" && "SYSTEM LOGO"}
                   </div>
+                </div>
+
+                <div className="flex flex-col gap-[8px]">
+                  <div className="text-[var(--emerald-primary)] font-['Orbitron'] font-bold text-[10px] tracking-wide uppercase">Custom filename (optional)</div>
                   <input
                     type="text"
-                    placeholder="Custom filename (optional)"
-                    className="bg-[#151515] text-white border border-[#333] p-[8px] text-[12px] shrink-0 outline-none focus:border-[var(--emerald-primary)]"
+                    placeholder="Enter title..."
+                    className="bg-[#151515] text-[#fff] border border-[#333] p-[10px] text-[13px] outline-none focus:border-[var(--emerald-primary)] placeholder-[#555] font-mono"
                     value={customUploadName}
                     onChange={(e) => setCustomUploadName(e.target.value)}
                   />
+                </div>
 
-                  <div
-                    style={{ display: currentAdminTab === "CHAR" ? "flex" : "none" }}
-                    className="flex-col gap-[8px] text-[11px] bg-[#151515] border border-[#333] p-[15px] shrink-0"
-                  >
+                <div
+                  className="h-[220px] shrink-0 border-2 border-dashed border-[#444] bg-[#111] flex flex-col items-center justify-center text-center text-[#777] cursor-pointer p-[20px] box-border hover:border-[var(--emerald-primary)] transition-colors"
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (e.dataTransfer.files.length)
+                      handleUpload(e.dataTransfer.files);
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <svg className="w-[30px] h-[30px] mb-[15px] fill-current text-[var(--emerald-primary)]" viewBox="0 0 24 24">
+                    <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/>
+                  </svg>
+                  <div className="font-['Orbitron'] text-[18px] mb-[10px] text-[var(--emerald-primary)] font-bold tracking-widest">
+                    DRAG & DROP
+                  </div>
+                  <div className="text-[12px] font-bold tracking-wider text-[#ccc] mb-[15px]">Click or drop media here</div>
+                  <div className="text-[9px] uppercase tracking-wider text-[#777] leading-relaxed">
+                    Note: Large files may exceed<br/>
+                    browser storage. Use url inputs<br/>
+                    if local space is limited.
+                  </div>
+                  <input
+                    type="file"
+                    multiple
+                    ref={fileInputRef}
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files?.length) handleUpload(e.target.files);
+                    }}
+                  />
+                </div>
+
+                <div className="text-[12px] text-[var(--emerald-primary)] font-bold">
+                  {uploadMsg}
+                </div>
+
+                {currentAdminTab === "CHAR" && (
+                  <div className="flex flex-col gap-[8px] text-[11px] bg-[#151515] border border-[#333] p-[15px] shrink-0">
                     <div className="text-[var(--emerald-primary)] font-['Orbitron'] text-[12px] mb-[4px]">
                       UNIT METADATA
                     </div>
@@ -978,80 +1227,20 @@ export default function App() {
                         <span className="text-[10px]">CLEAR</span>
                       </button>
                       <button
-                        className="mech-btn flex-1 !h-[30px] border-[var(--accent-cyan)] !text-[var(--accent-cyan)]"
+                        className="mech-btn flex-1 !h-[30px] border-[var(--emerald-primary)] !text-[var(--emerald-primary)]"
                         onClick={updateSelectedCharMetadata}
                       >
                         <span className="text-[10px]">UPDATE</span>
                       </button>
                     </div>
                   </div>
+                )}
 
-                  <div
-                    style={{ display: currentAdminTab === "HOME_MEDIA" ? "flex" : "none" }}
-                    className="flex-col gap-[8px] text-[11px] bg-[#151515] border border-[#333] p-[15px] shrink-0"
-                  >
+                <div className="mt-auto">
+                  {/* Category textareas based on tab... */}
+                  <div className="flex-col gap-[8px] text-[11px] bg-[#151515] border border-[#333] p-[15px] shrink-0 flex hidden">
                     <div className="text-[var(--emerald-primary)] font-['Orbitron'] text-[12px] mb-[4px]">
-                      HOME MEDIA
-                    </div>
-                    <div className="text-[#ccc] text-[10px] mb-2 leading-relaxed">
-                      Select an image or video from the gallery to set as the HOME screen (COMMAND NODE) background.
-                    </div>
-                    <div className="flex gap-[10px] mb-[10px] items-center">
-                      <select
-                        className="bg-[#111] text-[#ccc] border border-[#333] px-[6px] py-[4px] text-[11px] outline-none flex-1"
-                        value={adminSplashMode}
-                        onChange={(e) => setAdminSplashMode(e.target.value)}
-                      >
-                        <option value="SINGLE">Single Media (Loop)</option>
-                        <option value="SEQUENCE">Sequential Video Playlist</option>
-                      </select>
-                      <div className="flex items-center gap-[5px]">
-                        <span className="text-[#888] text-[9px] w-[40px]">OPACITY</span>
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          value={adminSplashOpacity}
-                          onChange={(e) => setAdminSplashOpacity(Number(e.target.value))}
-                          className="w-[60px]"
-                        />
-                      </div>
-                    </div>
-                    <div className="text-[10px] p-[10px] bg-[#0a0a0a] border border-[#222] truncate text-[#aaa] mb-2">
-                       {adminSplashMode === "SINGLE" ? adminSplashMedia : "PLAYING ALL VIDEOS IN SEQUENCE"}
-                    </div>
-                    <button
-                      className="mech-btn !h-[30px] border-[var(--emerald-primary)] !text-[var(--emerald-primary)] hover:bg-[var(--emerald-primary)] hover:bg-opacity-20"
-                      onClick={() => {
-                        if (adminPreviewSrc) {
-                          setAdminSplashMedia(adminPreviewSrc);
-                          setUploadMsg("HOME MEDIA UPDATED. DONT FORGET TO SAVE.");
-                        } else {
-                          setUploadMsg("SELECT A MEDIA FROM THE GALLERY FIRST.");
-                        }
-                      }}
-                    >
-                      <span className="text-[10px] tracking-widest">SET SELECTED AS SINGLE MEDIA</span>
-                    </button>
-                    {adminPreviewSrc && (adminPreviewSrc.endsWith(".mp4") || adminPreviewSrc.endsWith(".webm")) && adminSplashMode === "SEQUENCE" && (
-                      <button
-                        className={`mech-btn !h-[30px] mt-2 ${adminPlaylistExcludes.includes(adminPreviewSrc) ? "border-[#555] !text-[#555] hover:bg-[#333]" : "border-[var(--emerald-primary)] !text-[var(--emerald-primary)] hover:bg-[var(--emerald-primary)] hover:bg-opacity-20"}`}
-                        onClick={() => {
-                          if (adminPlaylistExcludes.includes(adminPreviewSrc)) {
-                            setAdminPlaylistExcludes(adminPlaylistExcludes.filter(src => src !== adminPreviewSrc));
-                          } else {
-                            setAdminPlaylistExcludes([...adminPlaylistExcludes, adminPreviewSrc]);
-                          }
-                        }}
-                      >
-                        <span className="text-[10px] tracking-widest">{adminPlaylistExcludes.includes(adminPreviewSrc) ? "ADD TO PLAYLIST" : "REMOVE FROM PLAYLIST"}</span>
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="flex-col gap-[8px] text-[11px] bg-[#151515] border border-[#333] p-[15px] shrink-0 flex mt-auto">
-                    <div className="text-[var(--emerald-primary)] font-['Orbitron'] text-[12px] mb-[4px]">
-                      CATEGORIES (Comma separated)
+                      CATEGORIES
                     </div>
                     {currentAdminTab === "CHAR" && (
                       <textarea
@@ -1078,18 +1267,17 @@ export default function App() {
                       ></textarea>
                     )}
                   </div>
-
-                  <div className="text-[12px] text-[var(--emerald-primary)] font-bold mb-[10px]">
-                    {uploadMsg}
-                  </div>
                 </div>
+              </div>
 
-                {/* GALLERY THUMBNAILS */}
-                <div className="flex-1 border border-[#333] bg-[#050505] overflow-y-auto flex flex-wrap gap-[12px] p-[20px] content-start">
+              {/* RIGHT MAIN PANEL */}
+              <div className="flex-1 flex flex-col min-w-0 h-full">
+                {/* GALLERY TOP AREA */}
+                <div className="h-[200px] shrink-0 overflow-y-auto content-start flex flex-wrap gap-[15px] p-[10px]">
                   {thumbsData.map((item, idx) => (
                     <div
                       key={idx}
-                      className="w-[100px] h-[100px] bg-[#111] border-2 border-transparent hover:border-[#555] relative cursor-pointer group transition-colors"
+                      className="w-[120px] bg-[#1a1a1a] border border-[#333] hover:border-[#666] relative cursor-pointer group transition-colors flex flex-col"
                       onClick={() => {
                         setAdminPreviewSrc(item.src);
                         if (currentAdminTab === "CHAR") {
@@ -1099,68 +1287,99 @@ export default function App() {
                           setFmRole(units[idx].role || "");
                           setFmDesc(units[idx].desc || "");
                           setFmDescJp(units[idx].descJp || "");
+                        } else if (currentAdminTab === "LOGO") {
+                          // if they click a logo in the logos tab, we can make it the system logo?
                         }
                       }}
                     >
-                      {item.src.endsWith(".mp4") || item.src.endsWith(".webm") ? (
-                        <video
-                          src={item.src}
-                          className="w-full h-full object-cover opacity-80 group-hover:opacity-100"
-                        />
-                      ) : (
-                        <img
-                          src={item.src}
-                          className="w-full h-full object-cover opacity-80 group-hover:opacity-100"
-                          onError={(e: any) => {
-                            e.target.style.opacity = 0;
-                          }}
-                        />
-                      )}
-                      <div className="absolute top-[-8px] right-[-8px] flex opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                        <button
-                          className="text-[10px] font-bold bg-[#b00] hover:bg-[#f00] text-white border border-[#400] rounded-full cursor-pointer w-[24px] h-[24px] flex items-center justify-center shadow-md"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteAdminItem(idx);
-                          }}
-                          title="Delete"
-                        >
-                          X
-                        </button>
+                      <div className="w-full h-[90px] bg-[#000] relative">
+                        {item.src.endsWith(".mp4") || item.src.endsWith(".webm") ? (
+                          <video
+                            src={item.src}
+                            className="w-full h-full object-cover opacity-80 group-hover:opacity-100"
+                          />
+                        ) : (
+                          <img
+                            src={item.src}
+                            className="w-full h-full object-cover opacity-80 group-hover:opacity-100"
+                            onError={(e: any) => {
+                              e.target.style.opacity = 0;
+                            }}
+                          />
+                        )}
+                        <div className="absolute top-[-8px] right-[-8px] flex opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                          <button
+                            className="text-[10px] font-bold bg-[#b00] hover:bg-[#f00] text-white border border-[#400] rounded-full cursor-pointer w-[24px] h-[24px] flex items-center justify-center shadow-md"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteAdminItem(idx);
+                            }}
+                            title="Delete"
+                          >
+                            X
+                          </button>
+                        </div>
                       </div>
-                      <div className="absolute bottom-0 w-full bg-[rgba(0,0,0,0.8)] text-[#aaa] text-[9px] p-[4px] px-[6px] overflow-hidden whitespace-nowrap text-ellipsis pointer-events-none border-t border-[#222]">
+                      <div className="bg-[#1a1a1a] text-[#aaa] text-[9px] p-[6px] font-bold tracking-widest text-center uppercase border-t border-[#333] truncate">
                         {item.f}
                       </div>
+
+                      {currentAdminTab === "LOGO" && (
+                         <div className="p-[5px] border-t border-[#333]">
+                           <button 
+                             className="w-full bg-[#111] hover:bg-[var(--emerald-diffuse)] text-[var(--emerald-primary)] text-[9px] border border-[var(--emerald-primary)] py-[4px] font-bold uppercase transition-colors"
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               setSystemLogo(item.src);
+                               setUploadMsg("SYSTEM LOGO UPDATED. REMEMBER TO SAVE JSON DATA.");
+                             }}
+                           >
+                             SET AS LOGO
+                           </button>
+                         </div>
+                      )}
                     </div>
                   ))}
+                  
+                  {thumbsData.length === 0 && (
+                     <div className="w-full h-full flex items-center justify-center text-[#555] font-['Orbitron'] tracking-widest">
+                       NO MEDIA FOUND
+                     </div>
+                  )}
                 </div>
-              </div>
 
-              {/* BOTTOM HALF: LARGE PREVIEW */}
-              <div className="flex-1 border border-[#333] bg-[#000] flex items-center justify-center relative min-h-0">
-                <div className="absolute top-[15px] left-[15px] text-[14px] text-[#555] font-['Orbitron'] pointer-events-none tracking-widest">
-                  SELECTED MEDIA PREVIEW
-                </div>
-                <div className="w-[95%] h-[95%] flex items-center justify-center p-[20px]">
-                  {adminPreviewSrc &&
-                    (adminPreviewSrc.endsWith(".mp4") ||
-                    adminPreviewSrc.endsWith(".webm") ? (
-                      <video
-                        src={adminPreviewSrc}
-                        controls
-                        autoPlay
-                        className="max-w-full max-h-full object-contain filter drop-shadow-[0_0_20px_rgba(255,255,255,0.1)]"
-                      />
-                    ) : (
-                      <img
-                        src={adminPreviewSrc}
-                        className="max-w-full max-h-full object-contain filter drop-shadow-[0_0_20px_rgba(255,255,255,0.1)]"
-                      />
-                    ))}
+                {/* BOTTOM PREVIEW AREA */}
+                <div className="flex-1 min-h-0 border-t border-[#333] flex flex-row mt-[20px] bg-[#080808]">
+                  <div className="w-[200px] border-r border-[#333] p-[15px] shrink-0 font-['Orbitron'] text-[12px] tracking-widest text-[#ccc] font-bold">
+                    SELECTED MEDIA<br/>PREVIEW
+                  </div>
+                  <div className="flex-1 relative flex items-center justify-center p-[10px] overflow-hidden">
+                    {!adminPreviewSrc && (
+                      <span className="text-[#333] font-['Orbitron'] text-[14px] tracking-widest font-bold">SELECT MEDIA TO PREVIEW</span>
+                    )}
+                    {adminPreviewSrc &&
+                      (adminPreviewSrc.endsWith(".mp4") ||
+                      adminPreviewSrc.endsWith(".webm") ? (
+                        <video
+                          src={adminPreviewSrc}
+                          controls
+                          autoPlay
+                          className="max-w-full max-h-full object-contain filter drop-shadow-[0_0_20px_rgba(255,255,255,0.05)]"
+                        />
+                      ) : (
+                        <div className="w-full h-full p-[20px] flex items-center justify-center">
+                          <img
+                            src={adminPreviewSrc}
+                            className="max-w-full max-h-full object-contain filter drop-shadow-[0_0_20px_rgba(255,255,255,0.05)]"
+                          />
+                        </div>
+                      ))}
+                  </div>
                 </div>
               </div>
-            </>
+            </div>
           )}
+        </div>
         </div>
       </section>
     );
@@ -1355,7 +1574,11 @@ export default function App() {
             <aside className="chassis-side">
               <div className="structural-panel"></div>
               <div className="button-area">
-                <div className="nav-group flex-none">
+                <div className="flex flex-col mt-[-5px]">
+                  <div className="mb-4 flex justify-center px-4">
+                    <img src={systemLogo} alt="S Logo" className="w-[125px] object-contain opacity-85 hover:opacity-100 transition-opacity" />
+                  </div>
+                  <div className="nav-group flex-none">
                   <button
                     className={`mech-btn ${currentNav === "HOME" ? "active" : ""}`}
                     onClick={() => setCurrentNav("HOME")}
@@ -1387,6 +1610,7 @@ export default function App() {
                     <span>OVERVIEW</span>
                   </button>
                 </div>
+                </div>
 
                 <div className="nav-group flex-none">
                   <button
@@ -1401,8 +1625,16 @@ export default function App() {
                   >
                     <span>OPENING TOP</span>
                   </button>
-                  <div className="text-[7px] text-[#555] mt-[15px] font-mono">
-                    NODE.CLK: <span id="dash-clk">{clock}</span>
+                  <div className="flex items-baseline justify-between mt-[15px] px-1">
+                    <span 
+                      className="text-[9px] text-[var(--accent-cyan)] font-mono tracking-widest cursor-pointer opacity-80 hover:opacity-100 transition-opacity whitespace-nowrap"
+                      onClick={() => setClockMode(prev => prev === "REAL" ? "LIMIT" : "REAL")}
+                    >
+                      {clockMode === "REAL" ? "RIGHT NOW" : "TIME LIMIT"}
+                    </span>
+                    <div className="text-[16px] text-[#999] font-mono tracking-widest font-bold text-right shrink-0 min-w-[125px]">
+                      <span id="dash-clk">{clockMode === "REAL" ? clock : countdownText}</span>
+                    </div>
                   </div>
                 </div>
               </div>

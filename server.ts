@@ -14,7 +14,8 @@ async function startServer() {
   const ASSET_DIRS: Record<string, string> = {
     'ART': 'public/assets/new_image',
     'CHAR': 'public/assets/characters/REALISTIC MODEL VERSION',
-    'MOTION': 'public/assets/motion'
+    'MOTION': 'public/assets/motion',
+    'LOGO': 'public/assets/logos'
   };
 
   async function loadData() {
@@ -80,6 +81,8 @@ async function startServer() {
       const filename = file.filename;
       let relPath = '';
       if (category === 'ART') {
+        relPath = filename;
+      } else if (category === 'LOGO') {
         relPath = filename;
       } else if (category === 'MOTION') {
          relPath = filename;
