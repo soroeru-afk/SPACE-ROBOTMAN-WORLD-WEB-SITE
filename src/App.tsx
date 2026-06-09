@@ -6,6 +6,20 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
+const TypewriterLine = ({ text }: { text: string }) => {
+  const [displayed, setDisplayed] = useState("");
+  useEffect(() => {
+    let i = 0;
+    const interval = setInterval(() => {
+      setDisplayed(text.substring(0, i + 1));
+      i++;
+      if (i >= text.length) clearInterval(interval);
+    }, 20);
+    return () => clearInterval(interval);
+  }, [text]);
+  return <>{displayed}</>;
+};
+
 const defaultStoryJp = [
   "人類が星を去り、沈黙した銀河。",
   "かつての創造主たちが遺した膨大な設計図と断片的な夢のデータが、",
@@ -133,6 +147,27 @@ export default function App() {
       clearInterval(interval);
     };
   }, [currentScreen, currentLang]);
+
+  useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (currentScreen !== "admin" && (target.tagName === "IMG" || target.tagName === "VIDEO")) {
+        e.preventDefault();
+      }
+    };
+    const handleDragStart = (e: DragEvent) => {
+      const target = e.target as HTMLElement;
+      if (currentScreen !== "admin" && (target.tagName === "IMG" || target.tagName === "VIDEO")) {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener("contextmenu", handleContextMenu);
+    document.addEventListener("dragstart", handleDragStart);
+    return () => {
+      document.removeEventListener("contextmenu", handleContextMenu);
+      document.removeEventListener("dragstart", handleDragStart);
+    };
+  }, [currentScreen]);
 
   useEffect(() => {
     fetch("/api/data")
@@ -333,13 +368,13 @@ export default function App() {
                 style={{ marginLeft: "30px", paddingLeft: "40px" }}
               >
                 <h2 
-                  className="font-['Orbitron'] text-[24px] text-white mb-[30px] tracking-[0.1em]"
+                  className="font-['Orbitron'] text-[24px] text-white mb-[80px] tracking-[0.1em]"
                   style={{ marginTop: storyStyle.marginTop || "30px" }}
                 >
                   WORLDVIEW // 世界観
                 </h2>
                 <div
-                  className="text-[#ccc] leading-[2.2] mb-8 max-w-2xl"
+                  className="text-[#ccc] leading-[2.2] mb-[80px] max-w-2xl"
                   style={{ fontSize: storyStyle.fontSizeJp, fontFamily: storyStyle.fontFamilyJp }}
                   dangerouslySetInnerHTML={{ __html: storyJp.join("<br><br>") }}
                 ></div>
@@ -816,6 +851,7 @@ export default function App() {
     setFmRole("");
     setFmDesc("");
     setFmDescJp("");
+    setAdminPreviewSrc("");
   };
 
   const [adminPreviewSrc, setAdminPreviewSrc] = useState("");
@@ -853,12 +889,12 @@ export default function App() {
     return (
       <section
         id="admin-screen"
-        className="fixed inset-0 w-full h-full bg-[#050505] z-[999] flex justify-center p-4 md:p-8 lg:p-10 box-border overflow-hidden"
+        className="fixed inset-0 z-[999] bg-black/80 flex items-center justify-center overflow-hidden"
       >
-        <div className="w-full max-w-[1600px] h-full flex flex-col min-w-0 bg-[#0a0a0a] border border-[#222] rounded-lg shadow-2xl p-4 sm:p-6 md:p-8">
+        <div className="w-[calc(100%-20px)] md:w-[calc(100%-40px)] h-[calc(100%-20px)] md:h-[calc(100%-40px)] max-w-[1600px] flex flex-col min-w-0 bg-[#0a0a0a] border border-[#333] shadow-[0_0_50px_rgba(0,0,0,0.8)] p-[20px] md:p-[30px] rounded-md">
           <header className="flex flex-wrap justify-between items-center border-b border-[#333] shrink-0 gap-4 pb-4">
           <div className="flex flex-wrap items-center gap-[20px] lg:gap-[30px] h-full min-w-0">
-            <div className="text-[var(--emerald-primary)] font-['Orbitron'] text-[20px] md:text-[24px] tracking-wide font-bold shrink-0">
+            <div style={{ paddingLeft: '10px' }} className="text-[var(--emerald-primary)] font-['Orbitron'] text-[20px] md:text-[24px] tracking-wide font-bold shrink-0">
               ADMIN DASHBOARD
             </div>
             <div className="flex flex-wrap gap-[10px] lg:gap-[30px] h-full lg:ml-[20px]">
@@ -909,18 +945,20 @@ export default function App() {
               </button>
             </div>
           </div>
-          <div className="flex flex-wrap gap-[15px] items-center pb-[5px]">
+          <div style={{ paddingRight: '10px', paddingTop: '6px' }} className="flex flex-wrap gap-[15px] items-center pb-[5px]">
             <span className="text-[var(--accent-cyan)] text-[11px] font-['Orbitron'] font-bold">
               {saveStatusMsg}
             </span>
             <button
-              className="mech-btn !w-auto px-6 !h-[35px] !text-[var(--emerald-primary)] border-[var(--emerald-primary)] hover:bg-[var(--emerald-diffuse)] font-bold text-[12px]"
+              style={{ paddingLeft: '5px', paddingRight: '5px', paddingTop: '0px', marginLeft: '0px' }}
+              className="mech-btn !w-auto !h-[35px] !text-[var(--emerald-primary)] border-[var(--emerald-primary)] hover:bg-[var(--emerald-diffuse)] font-bold text-[12px]"
               onClick={() => saveAdminData()}
             >
               <span>SAVE JSON DATA</span>
             </button>
             <button
-              className="mech-btn !w-auto px-6 !h-[35px] text-[#ccc] border-[#333] bg-[#111] hover:bg-[#222] font-bold text-[12px]"
+              style={{ paddingLeft: '5px', paddingRight: '5px' }}
+              className="mech-btn !w-auto !h-[35px] text-[#ccc] border-[#333] bg-[#111] hover:bg-[#222] font-bold text-[12px]"
               onClick={() => {
                 clearCharForm();
                 setCurrentScreen("dash");
@@ -1123,8 +1161,8 @@ export default function App() {
               {/* LEFT SIDEBAR: UPLOAD/FORM */}
               <div className="w-[300px] border-r border-[#333] flex flex-col gap-[20px] pr-[20px] overflow-y-auto shrink-0">
                 <div className="flex flex-col gap-[8px]">
-                  <div className="text-[var(--emerald-primary)] font-['Orbitron'] font-bold text-[10px] tracking-wide uppercase">Target Category</div>
-                  <div className="bg-[#151515] text-[#ccc] border border-[#333] p-[10px] text-[13px] font-bold font-mono tracking-widest select-none">
+                  <div style={{ paddingLeft: '10px' }} className="text-[var(--emerald-primary)] font-['Orbitron'] font-bold text-[10px] tracking-wide uppercase">Target Category</div>
+                  <div style={{ marginLeft: '0px', paddingLeft: '10px' }} className="bg-[#151515] text-[#ccc] border border-[#333] p-[10px] text-[13px] font-bold font-mono tracking-widest select-none">
                     {currentAdminTab === "ART" && "CG ARTWORKS"}
                     {currentAdminTab === "MOTION" && "MOVIE DATA"}
                     {currentAdminTab === "CHAR" && "CAST ROSTER"}
@@ -1133,7 +1171,7 @@ export default function App() {
                 </div>
 
                 <div className="flex flex-col gap-[8px]">
-                  <div className="text-[var(--emerald-primary)] font-['Orbitron'] font-bold text-[10px] tracking-wide uppercase">Custom filename (optional)</div>
+                  <div style={{ paddingLeft: '10px' }} className="text-[var(--emerald-primary)] font-['Orbitron'] font-bold text-[10px] tracking-wide uppercase">Custom filename (optional)</div>
                   <input
                     type="text"
                     placeholder="Enter title..."
@@ -1144,6 +1182,7 @@ export default function App() {
                 </div>
 
                 <div
+                  style={{ paddingLeft: '0px', marginLeft: '10px', marginRight: '10px' }}
                   className="h-[220px] shrink-0 border-2 border-dashed border-[#444] bg-[#111] flex flex-col items-center justify-center text-center text-[#777] cursor-pointer p-[20px] box-border hover:border-[var(--emerald-primary)] transition-colors"
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
@@ -1176,7 +1215,7 @@ export default function App() {
                   />
                 </div>
 
-                <div className="text-[12px] text-[var(--emerald-primary)] font-bold">
+                <div className="text-[12px] text-[var(--emerald-primary)] font-bold pl-[15px]">
                   {uploadMsg}
                 </div>
 
@@ -1393,10 +1432,10 @@ export default function App() {
     setBootProgress(0);
     setBootLogs([]);
     const logs = [
-      { p: 25, text: "MOUNTING_LOCAL_DRIVES.........COMPLETE" },
-      { p: 50, text: "SYNC_DATABANK_PROTOCOL........COMPLETE" },
-      { p: 80, text: "VERIFYING_UNIT_ARCHIVES.......COMPLETE" },
-      { p: 100, text: "ALL_SYSTEMS_GO................100%" },
+      { p: 1, text: "MOUNTING_LOCAL_DRIVES.........COMPLETE" },
+      { p: 25, text: "SYNC_DATABANK_PROTOCOL........COMPLETE" },
+      { p: 50, text: "VERIFYING_UNIT_ARCHIVES.......COMPLETE" },
+      { p: 75, text: "ALL_SYSTEMS_GO................100%" },
     ];
     let cur = 0;
     let logIdx = 0;
@@ -1496,8 +1535,8 @@ export default function App() {
         >
           <div className="w-full max-w-4xl px-[50px] flex flex-col items-center mt-[-40px]">
             {/* Loading Ring */}
-            <div className="w-[180px] h-[180px] flex justify-center items-center mb-[50px] relative">
-              <svg width="180" height="180" viewBox="0 0 180 180">
+            <div className="w-[180px] h-[180px] flex justify-center items-center mb-[100px] relative">
+              <svg style={{ paddingLeft: '0px', paddingBottom: '22px' }} width="180" height="180" viewBox="0 0 180 180">
                 <circle
                   cx="90"
                   cy="90"
@@ -1534,14 +1573,14 @@ export default function App() {
             </div>
             
             {/* Terminal Output */}
-            <div className="flex flex-col w-full max-w-2xl px-[30px] mt-[30px]">
-              <div className="font-['Orbitron'] text-[18px] text-[var(--emerald-primary)] mb-[40px] font-bold tracking-[8px] text-center" style={{ textShadow: "0 0 8px var(--emerald-primary)" }}>
+            <div className="flex flex-col w-full max-w-2xl px-[30px] mt-[120px]">
+              <div className="font-['Orbitron'] text-[18px] text-[var(--emerald-primary)] mb-[40px] font-bold tracking-[8px] text-center" style={{ marginTop: '16px', textShadow: "0 0 8px var(--emerald-primary)" }}>
                 SYSTEM BOOT PROTOCOL
               </div>
-              <div className="w-full flex justify-center">
+              <div style={{ paddingTop: '0px', marginTop: '22px' }} className="w-full flex justify-center">
                 <div className="text-[13px] text-[var(--emerald-primary)] leading-[3] tracking-[2px] font-mono whitespace-pre-wrap h-[180px] px-[30px] w-max text-left">
                   {bootLogs.map((l, i) => (
-                    <div key={i} className="animate-pulse">{l}</div>
+                    <div key={i}><TypewriterLine text={l} /></div>
                   ))}
                 </div>
               </div>
