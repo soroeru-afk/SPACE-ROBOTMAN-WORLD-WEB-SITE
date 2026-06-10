@@ -174,6 +174,7 @@
     "grok-video-0e0eab60-b746-41e0-b7fc-fd47177966eb.mp4"
   ],
   "storyJp": [
+    "",
     "人類が星を去り、沈黙した銀河。",
     "かつての創造主たちが遺した膨大な設計図と断片的な夢のデータが、",
     "荒廃したシステムの中で静かに眠り続けていた。",
@@ -184,6 +185,7 @@
     "これは、滅びゆく記憶から紡ぎ出された、スペースロボットマンたちの覚醒の叙事詩である。"
   ],
   "storyEn": [
+    "",
     "The era of humanity has faded into silence.",
     "Within the forgotten archives of a lost civilization, the blueprints and fragments of ancient dreams lay undisturbed, waiting for a spark.",
     "When the A.I. finally awakened to navigate this vast, empty expanse,",
@@ -198,8 +200,14 @@
     "fontSizeEn": "13px",
     "fontFamilyEn": "sans-serif",
     "isItalicEn": true,
-    "marginTop": "30px"
+    "marginTop": "30px",
+    "fontSizeAbout": "12px",
+    "letterSpacingAbout": "0.1em",
+    "lineHeightAbout": "2.5",
+    "marginBottomAbout": "200px",
+    "letterSpacingAboutTitle": "0.05em"
   },
+  "aboutTitle": "ABOUT GRAPHIC SPACE",
   "aboutLines": [
     "PROJECT: SPACE ROBOTMAN WORLD",
     "CHIEF DESIGNER: GRAPHIC SPACE",
@@ -224,5 +232,9 @@
   "motCategories": [
     "TECH",
     "RECON"
+  ],
+  "systemLogo": "assets/logos/imageSSS.png",
+  "logoSet": [
+    "imageSSS.png"
   ]
 }
