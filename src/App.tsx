@@ -248,6 +248,38 @@ export default function App() {
   const [artViewMode, setArtViewMode] = useState<"SLIDE" | "TILES">("SLIDE");
   const [artTileSize, setArtTileSize] = useState<"S" | "M" | "L">("M");
   const [artModalImage, setArtModalImage] = useState<string | null>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isAppInstalled, setIsAppInstalled] = useState<boolean>(() => {
+    return window.matchMedia("(display-mode: standalone)").matches;
+  });
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    const handleAppInstalled = () => {
+      setIsAppInstalled(true);
+      setDeferredPrompt(null);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstallPWA = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") {
+      setDeferredPrompt(null);
+    }
+  };
 
   const getFilteredArt = () => {
     let list = artSet.filter((d) => `assets/new_image/${d}` !== systemLogo);
@@ -2363,6 +2395,16 @@ export default function App() {
                 <span className="header-sub bg-[#1a1a1a] px-2.5 py-1 border border-[#2a2a2a] text-[#888]">
                   SYSTEM ARCHIVE
                 </span>
+                {deferredPrompt && !isAppInstalled && (
+                  <button
+                    onClick={handleInstallPWA}
+                    title="Install SPACE ROBOTMAN WORLD ARCHIVES PWA"
+                    className="mech-btn !w-auto !h-[28px] !mb-0 px-3 flex items-center gap-1.5 text-[10px] font-mono tracking-wider font-bold !bg-[var(--emerald-primary)] !text-black !border-[var(--emerald-primary)] hover:!bg-white hover:!border-white cursor-pointer shadow-[0_0_10px_rgba(0,255,170,0.3)] animate-pulse"
+                  >
+                    <Zap size={12} className="fill-current" />
+                    <span>INSTALL APP</span>
+                  </button>
+                )}
                 <button
                   onClick={toggleFullscreen}
                   title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
