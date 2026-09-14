@@ -13,7 +13,7 @@ export default defineConfig(({mode}) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
+        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png', 'pwa-maskable-512x512.png'],
         manifest: {
           name: 'SPACE ROBOTMAN WORLD ARCHIVES',
           short_name: 'ROBOTMAN ARCHIVES',
@@ -36,10 +36,10 @@ export default defineConfig(({mode}) => {
               type: 'image/png',
             },
             {
-              src: 'pwa-512x512.png',
+              src: 'pwa-maskable-512x512.png',
               sizes: '512x512',
               type: 'image/png',
-              purpose: 'any maskable',
+              purpose: 'maskable',
             },
           ],
         },
