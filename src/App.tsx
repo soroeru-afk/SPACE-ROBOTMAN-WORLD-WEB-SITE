@@ -2403,14 +2403,6 @@ export default function App() {
                   SYSTEM ARCHIVE
                 </span>
                 <button
-                  onClick={handleInstallPWA}
-                  title="Install SPACE ROBOTMAN WORLD ARCHIVES PWA"
-                  className="mech-btn !w-auto !h-[28px] !mb-0 px-3 flex items-center gap-1.5 text-[10px] font-mono tracking-wider font-bold !bg-[var(--emerald-primary)] !text-black !border-[var(--emerald-primary)] hover:!bg-white hover:!border-white cursor-pointer shadow-[0_0_10px_rgba(0,255,170,0.3)]"
-                >
-                  <Zap size={12} className="fill-current" />
-                  <span>{isAppInstalled ? "PWA INSTALLED" : "INSTALL APP"}</span>
-                </button>
-                <button
                   onClick={toggleFullscreen}
                   title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
                   className="w-7 h-7 bg-[#1c1c1c] hover:bg-[#282828] border border-[#333] hover:border-[#666] text-[#888] hover:text-[#fff] flex items-center justify-center transition-colors cursor-pointer"
