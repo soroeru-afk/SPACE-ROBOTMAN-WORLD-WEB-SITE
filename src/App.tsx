@@ -4,7 +4,9 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { ChevronLeft, ChevronRight, LayoutGrid, List, Monitor, Search, Shield, Zap, Cpu, Activity, Sparkles, ExternalLink, Maximize2, Minimize2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, LayoutGrid, List, Monitor, Search, Shield, Zap, Cpu, Activity, Sparkles, ExternalLink, Maximize2, Minimize2, Download, Upload, FileJson, Check, AlertCircle, RefreshCw, Copy, Database, Lock, Key, Delete } from "lucide-react";
+import { loadInitialData, saveToLocalData, defaultAppData } from "./defaultData";
+import { OfflineIndicator } from "./components/OfflineIndicator";
 
 const TypewriterLine = ({ text }: { text: string }) => {
   const [displayed, setDisplayed] = useState("");
@@ -77,31 +79,33 @@ const defaultArtCats = ["CONCEPT", "ENVIRON"];
 const defaultMotCats = ["TECH", "RECON"];
 export const DEFAULT_SYSTEM_LOGO = "assets/logos/imageSSS.png";
 
+const initialCachedData = loadInitialData();
+
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState("splash"); // splash, story, boot, dash, admin
   const [currentLang, setCurrentLang] = useState("JP");
   const [currentNav, setCurrentNav] = useState("HOME");
   const [currentAdminTab, setCurrentAdminTab] = useState("ART");
 
-  const [storyJp, setStoryJp] = useState<string[]>(defaultStoryJp);
-  const [storyEn, setStoryEn] = useState<string[]>(defaultStoryEn);
-  const [storyStyle, setStoryStyle] = useState(defaultStoryStyle);
-  const [aboutLines, setAboutLines] = useState<string[]>(defaultAboutLines);
-  const [aboutTitle, setAboutTitle] = useState<string>(defaultAboutTitle);
-  const [splashMedia, setSplashMedia] = useState<string>("assets/motion/grok-video-1abb2451-8444-4d2a-9d86-aca8f39cef9e%20(1).mp4");
-  const [splashMode, setSplashMode] = useState<string>("SINGLE"); // SINGLE, RANDOM, SEQUENCE
-  const [splashOpacity, setSplashOpacity] = useState<number>(30); // Default to 30% (less transparent than 10%)
-  const [playlistExcludes, setPlaylistExcludes] = useState<string[]>([]);
+  const [storyJp, setStoryJp] = useState<string[]>(() => initialCachedData.storyJp || defaultStoryJp);
+  const [storyEn, setStoryEn] = useState<string[]>(() => initialCachedData.storyEn || defaultStoryEn);
+  const [storyStyle, setStoryStyle] = useState(() => ({ ...defaultStoryStyle, ...initialCachedData.storyStyle }));
+  const [aboutLines, setAboutLines] = useState<string[]>(() => initialCachedData.aboutLines || defaultAboutLines);
+  const [aboutTitle, setAboutTitle] = useState<string>(() => initialCachedData.aboutTitle || defaultAboutTitle);
+  const [splashMedia, setSplashMedia] = useState<string>(() => initialCachedData.splashMedia || defaultAppData.splashMedia);
+  const [splashMode, setSplashMode] = useState<string>(() => initialCachedData.splashMode || "SEQUENCE");
+  const [splashOpacity, setSplashOpacity] = useState<number>(() => initialCachedData.splashOpacity !== undefined ? initialCachedData.splashOpacity : 30);
+  const [playlistExcludes, setPlaylistExcludes] = useState<string[]>(() => initialCachedData.playlistExcludes || []);
   
-  const [charCategories, setCharCategories] = useState<string[]>(defaultCharCats);
-  const [artCategories, setArtCategories] = useState<string[]>(defaultArtCats);
-  const [motCategories, setMotCategories] = useState<string[]>(defaultMotCats);
-  const [systemLogo, setSystemLogo] = useState<string>(DEFAULT_SYSTEM_LOGO);
+  const [charCategories, setCharCategories] = useState<string[]>(() => initialCachedData.charCategories || defaultCharCats);
+  const [artCategories, setArtCategories] = useState<string[]>(() => initialCachedData.artCategories || defaultArtCats);
+  const [motCategories, setMotCategories] = useState<string[]>(() => initialCachedData.motCategories || defaultMotCats);
+  const [systemLogo, setSystemLogo] = useState<string>(() => initialCachedData.systemLogo || DEFAULT_SYSTEM_LOGO);
 
-  const [units, setUnits] = useState<any[]>([]);
-  const [artSet, setArtSet] = useState<string[]>([]);
-  const [motSet, setMotSet] = useState<string[]>([]);
-  const [logoSet, setLogoSet] = useState<string[]>([]);
+  const [units, setUnits] = useState<any[]>(() => (initialCachedData.units && initialCachedData.units.length > 0) ? initialCachedData.units : defaultAppData.units);
+  const [artSet, setArtSet] = useState<string[]>(() => (initialCachedData.artSet && initialCachedData.artSet.length > 0) ? initialCachedData.artSet : defaultAppData.artSet);
+  const [motSet, setMotSet] = useState<string[]>(() => (initialCachedData.motSet && initialCachedData.motSet.length > 0) ? initialCachedData.motSet : defaultAppData.motSet);
+  const [logoSet, setLogoSet] = useState<string[]>(() => (initialCachedData.logoSet && initialCachedData.logoSet.length > 0) ? initialCachedData.logoSet : defaultAppData.logoSet);
 
   const [currentVideoIndex, setCurrentVideoIndex] = useState(-1);
 
@@ -186,13 +190,16 @@ export default function App() {
 
   useEffect(() => {
     fetch("/api/data")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         if (data) {
-          setUnits(data.units || []);
-          setArtSet(data.artSet || []);
-          setMotSet(data.motSet || []);
-          setLogoSet(data.logoSet || []);
+          if (Array.isArray(data.units) && data.units.length > 0) setUnits(data.units);
+          if (Array.isArray(data.artSet) && data.artSet.length > 0) setArtSet(data.artSet);
+          if (Array.isArray(data.motSet) && data.motSet.length > 0) setMotSet(data.motSet);
+          if (Array.isArray(data.logoSet) && data.logoSet.length > 0) setLogoSet(data.logoSet);
           if (data.storyJp) setStoryJp(data.storyJp);
           if (data.storyEn) setStoryEn(data.storyEn);
           if (data.storyStyle) setStoryStyle({ ...defaultStoryStyle, ...data.storyStyle });
@@ -207,12 +214,13 @@ export default function App() {
           if (data.motCategories) setMotCategories(data.motCategories);
           if (data.systemLogo && data.systemLogo.trim() !== "") {
             setSystemLogo(data.systemLogo);
-          } else {
-            setSystemLogo(DEFAULT_SYSTEM_LOGO);
           }
+          saveToLocalData(data);
         }
       })
-      .catch((e) => console.error("Could not load data:", e));
+      .catch((e) => {
+        console.warn("Server API not reachable; maintaining cached/embedded offline data:", e);
+      });
 
     const timer = setInterval(() => {
       const d = new Date();
@@ -248,45 +256,6 @@ export default function App() {
   const [artViewMode, setArtViewMode] = useState<"SLIDE" | "TILES">("SLIDE");
   const [artTileSize, setArtTileSize] = useState<"S" | "M" | "L">("M");
   const [artModalImage, setArtModalImage] = useState<string | null>(null);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [isAppInstalled, setIsAppInstalled] = useState<boolean>(() => {
-    return window.matchMedia("(display-mode: standalone)").matches;
-  });
-
-  useEffect(() => {
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-    const handleAppInstalled = () => {
-      setIsAppInstalled(true);
-      setDeferredPrompt(null);
-    };
-
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    window.addEventListener("appinstalled", handleAppInstalled);
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-      window.removeEventListener("appinstalled", handleAppInstalled);
-    };
-  }, []);
-
-  const handleInstallPWA = async () => {
-    if (!deferredPrompt) {
-      if (window.matchMedia("(display-mode: standalone)").matches) {
-        alert("SPACE ROBOTMAN WORLD ARCHIVES はすでにPWAアプリとして起動しています。");
-      } else {
-        alert("ブラウザのアドレスバー右側にある「インストール」アイコン（または設定メニューの『アプリをインストール』）をクリックしてPWAアプリとしてインストールできます。");
-      }
-      return;
-    }
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === "accepted") {
-      setDeferredPrompt(null);
-    }
-  };
 
   const getFilteredArt = () => {
     let list = artSet.filter((d) => `assets/new_image/${d}` !== systemLogo);
@@ -1407,6 +1376,265 @@ export default function App() {
   };
 
   const [customUploadName, setCustomUploadName] = useState("");
+  const [importPendingData, setImportPendingData] = useState<any | null>(null);
+  const [importFileName, setImportFileName] = useState<string>("");
+  const [importErrorMsg, setImportErrorMsg] = useState<string>("");
+  const [copiedBackup, setCopiedBackup] = useState<boolean>(false);
+  const jsonFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Admin 4-digit PIN authentication
+  const [adminPin, setAdminPin] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem("SPACE_ROBOTMAN_ADMIN_PIN");
+      if (saved && saved.length === 4) return saved;
+      const initial = loadInitialData();
+      return initial.adminPin || "0000";
+    } catch {
+      return "0000";
+    }
+  });
+  const [sidebarPinInput, setSidebarPinInput] = useState<string>("");
+  const sidebarPinRef = useRef<HTMLInputElement>(null);
+  const [isSidebarPinFocused, setIsSidebarPinFocused] = useState<boolean>(false);
+  const [pinErrorMessage, setPinErrorMessage] = useState<string>("");
+  const [showPinModal, setShowPinModal] = useState<boolean>(false);
+  const [modalPinInput, setModalPinInput] = useState<string>("");
+  const [modalPinError, setModalPinError] = useState<string>("");
+  const [newAdminPinInput, setNewAdminPinInput] = useState<string>("");
+  const [pinChangeSuccessMsg, setPinChangeSuccessMsg] = useState<string>("");
+
+  const attemptAdminLogin = (pinToTest: string) => {
+    const targetPin = adminPin || "0000";
+    if (pinToTest.trim() === targetPin) {
+      setSidebarPinInput("");
+      setPinErrorMessage("");
+      setModalPinInput("");
+      setModalPinError("");
+      setShowPinModal(false);
+      setCurrentScreen("admin");
+    } else {
+      const err = "INCORRECT PIN // 暗証番号が違います";
+      setPinErrorMessage(err);
+      setModalPinError(err);
+      setTimeout(() => {
+        setPinErrorMessage("");
+      }, 3000);
+    }
+  };
+
+  const handleUpdateAdminPin = (newPin: string) => {
+    const cleaned = newPin.trim();
+    if (!/^\d{4}$/.test(cleaned)) {
+      setPinChangeSuccessMsg("エラー: 半角数字4桁で指定してください (例: 1234)");
+      setTimeout(() => setPinChangeSuccessMsg(""), 3500);
+      return;
+    }
+    setAdminPin(cleaned);
+    try {
+      localStorage.setItem("SPACE_ROBOTMAN_ADMIN_PIN", cleaned);
+      saveToLocalData({ adminPin: cleaned });
+    } catch (e) {
+      console.warn("Failed to persist PIN", e);
+    }
+    setNewAdminPinInput("");
+    setPinChangeSuccessMsg(`管理者暗証番号を「${cleaned}」に更新しました！`);
+    setTimeout(() => setPinChangeSuccessMsg(""), 4000);
+  };
+
+  const getCurrentFullData = () => {
+    return {
+      app: "SPACE ROBOTMAN WORLD",
+      version: "3.2",
+      exportedAt: new Date().toISOString(),
+      adminPin: adminPin || "0000",
+      units,
+      artSet,
+      motSet,
+      logoSet,
+      storyJp: adminStoryJp ? adminStoryJp.split("\n\n") : storyJp,
+      storyEn: adminStoryEn ? adminStoryEn.split("\n\n") : storyEn,
+      storyStyle: adminStoryStyle || storyStyle,
+      aboutTitle: adminAboutTitle || aboutTitle,
+      aboutLines: adminAboutText ? adminAboutText.split("\n") : aboutLines,
+      splashMedia: adminSplashMedia || splashMedia,
+      splashMode: adminSplashMode || splashMode,
+      splashOpacity: adminSplashOpacity !== undefined ? adminSplashOpacity : splashOpacity,
+      playlistExcludes: adminPlaylistExcludes || playlistExcludes,
+      charCategories: adminCharCategories ? adminCharCategories.split(",").map((s) => s.trim()).filter(Boolean) : charCategories,
+      artCategories: adminArtCategories ? adminArtCategories.split(",").map((s) => s.trim()).filter(Boolean) : artCategories,
+      motCategories: adminMotCategories ? adminMotCategories.split(",").map((s) => s.trim()).filter(Boolean) : motCategories,
+      systemLogo: systemLogo || DEFAULT_SYSTEM_LOGO,
+    };
+  };
+
+  const handleExportData = () => {
+    const currentData = getCurrentFullData();
+    const jsonStr = JSON.stringify(currentData, null, 2);
+    const blob = new Blob([jsonStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `space-robotman-backup-${dateStr}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    setSaveStatusMsg("BACKUP EXPORTED TO JSON!");
+    setTimeout(() => setSaveStatusMsg(""), 3000);
+  };
+
+  const handleCopyJsonToClipboard = () => {
+    const currentData = getCurrentFullData();
+    navigator.clipboard
+      .writeText(JSON.stringify(currentData, null, 2))
+      .then(() => {
+        setCopiedBackup(true);
+        setTimeout(() => setCopiedBackup(false), 2000);
+      })
+      .catch(() => {
+        setSaveStatusMsg("CLIPBOARD COPY FAILED");
+        setTimeout(() => setSaveStatusMsg(""), 2000);
+      });
+  };
+
+  const handleImportFile = (file: File) => {
+    setImportErrorMsg("");
+    setImportFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const parsed = JSON.parse(text);
+        if (!parsed || typeof parsed !== "object") {
+          throw new Error("無効なJSONファイルです（最上位がオブジェクトではありません）。");
+        }
+        const hasRecognizedKeys =
+          Array.isArray(parsed.units) ||
+          Array.isArray(parsed.artSet) ||
+          Array.isArray(parsed.motSet) ||
+          Array.isArray(parsed.storyJp) ||
+          parsed.storyJp !== undefined;
+
+        if (!hasRecognizedKeys) {
+          throw new Error("このJSONにはスペースロボットマンのデータが含まれていないようです。");
+        }
+
+        setImportPendingData(parsed);
+      } catch (err: any) {
+        setImportErrorMsg(`インポートエラー: ${err.message || "JSONの解析に失敗しました。"}`);
+        setImportPendingData(null);
+      }
+    };
+    reader.onerror = () => {
+      setImportErrorMsg("ファイルの読み込みに失敗しました。");
+      setImportPendingData(null);
+    };
+    reader.readAsText(file);
+  };
+
+  const applyImportedData = async (dataToApply: any) => {
+    try {
+      if (Array.isArray(dataToApply.units)) setUnits(dataToApply.units);
+      if (Array.isArray(dataToApply.artSet)) setArtSet(dataToApply.artSet);
+      if (Array.isArray(dataToApply.motSet)) setMotSet(dataToApply.motSet);
+      if (Array.isArray(dataToApply.logoSet)) setLogoSet(dataToApply.logoSet);
+      if (dataToApply.storyJp) {
+        const jArr = Array.isArray(dataToApply.storyJp) ? dataToApply.storyJp : [dataToApply.storyJp];
+        setStoryJp(jArr);
+        setAdminStoryJp(jArr.join("\n\n"));
+      }
+      if (dataToApply.storyEn) {
+        const eArr = Array.isArray(dataToApply.storyEn) ? dataToApply.storyEn : [dataToApply.storyEn];
+        setStoryEn(eArr);
+        setAdminStoryEn(eArr.join("\n\n"));
+      }
+      if (dataToApply.storyStyle) {
+        const newStyle = { ...defaultStoryStyle, ...dataToApply.storyStyle };
+        setStoryStyle(newStyle);
+        setAdminStoryStyle(newStyle);
+      }
+      if (dataToApply.aboutTitle) {
+        setAboutTitle(dataToApply.aboutTitle);
+        setAdminAboutTitle(dataToApply.aboutTitle);
+      }
+      if (dataToApply.aboutLines) {
+        const aLines = Array.isArray(dataToApply.aboutLines) ? dataToApply.aboutLines : [dataToApply.aboutLines];
+        setAboutLines(aLines);
+        setAdminAboutText(aLines.join("\n"));
+      }
+      if (dataToApply.splashMedia) {
+        setSplashMedia(dataToApply.splashMedia);
+        setAdminSplashMedia(dataToApply.splashMedia);
+      }
+      if (dataToApply.splashMode) {
+        setSplashMode(dataToApply.splashMode);
+        setAdminSplashMode(dataToApply.splashMode);
+      }
+      if (dataToApply.splashOpacity !== undefined) {
+        setSplashOpacity(dataToApply.splashOpacity);
+        setAdminSplashOpacity(dataToApply.splashOpacity);
+      }
+      if (dataToApply.playlistExcludes) {
+        setPlaylistExcludes(dataToApply.playlistExcludes);
+        setAdminPlaylistExcludes(dataToApply.playlistExcludes);
+      }
+      if (dataToApply.charCategories) {
+        setCharCategories(dataToApply.charCategories);
+        setAdminCharCategories(dataToApply.charCategories.join(", "));
+      }
+      if (dataToApply.artCategories) {
+        setArtCategories(dataToApply.artCategories);
+        setAdminArtCategories(dataToApply.artCategories.join(", "));
+      }
+      if (dataToApply.motCategories) {
+        setMotCategories(dataToApply.motCategories);
+        setAdminMotCategories(dataToApply.motCategories.join(", "));
+      }
+      if (dataToApply.systemLogo) {
+        setSystemLogo(dataToApply.systemLogo);
+      }
+      if (dataToApply.adminPin && typeof dataToApply.adminPin === "string" && dataToApply.adminPin.length === 4) {
+        setAdminPin(dataToApply.adminPin);
+        try {
+          localStorage.setItem("SPACE_ROBOTMAN_ADMIN_PIN", dataToApply.adminPin);
+        } catch (e) {}
+      }
+
+      saveToLocalData(dataToApply);
+
+      try {
+        await fetch("/api/update_data", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(dataToApply),
+        });
+      } catch (e) {
+        console.warn("Could not sync imported data to server; persisted to local storage.", e);
+      }
+
+      const uCount = Array.isArray(dataToApply.units) ? dataToApply.units.length : 0;
+      const aCount = Array.isArray(dataToApply.artSet) ? dataToApply.artSet.length : 0;
+      const mCount = Array.isArray(dataToApply.motSet) ? dataToApply.motSet.length : 0;
+
+      setSaveStatusMsg(`IMPORTED: ${uCount} UNITS, ${aCount} ARTS, ${mCount} MOVIES!`);
+      setImportPendingData(null);
+      setImportFileName("");
+      if (jsonFileInputRef.current) jsonFileInputRef.current.value = "";
+      setTimeout(() => setSaveStatusMsg(""), 3500);
+    } catch (err: any) {
+      setImportErrorMsg(`データの適用に失敗しました: ${err.message}`);
+    }
+  };
+
+  const handleResetToDefault = () => {
+    if (window.confirm("初期データ（出荷時設定）に戻しますか？現在のローカル変更はリセットされます。念のため先にエクスポートしておくことをお勧めします。")) {
+      applyImportedData(defaultAppData);
+      setSaveStatusMsg("RESET TO FACTORY DEFAULT DATA!");
+      setTimeout(() => setSaveStatusMsg(""), 3000);
+    }
+  };
 
   const saveAdminData = async (payloadToSave?: any) => {
     setSaveStatusMsg("SAVING...");
@@ -1432,6 +1660,7 @@ export default function App() {
         systemLogo: effectiveSystemLogo,
         logoSet: effectiveLogoSet,
       };
+      saveToLocalData(payload);
       const res = await fetch("/api/update_data", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1439,7 +1668,7 @@ export default function App() {
       });
       const data = await res.json();
       if (data.success) {
-        setSaveStatusMsg("AUTO-SAVED TO DATA.JSON!");
+        setSaveStatusMsg("AUTO-SAVED TO DATA.JSON & LOCAL!");
         setStoryJp(adminStoryJp.split("\n\n"));
         setStoryEn(adminStoryEn.split("\n\n"));
         setStoryStyle(adminStoryStyle);
@@ -1454,10 +1683,12 @@ export default function App() {
         setMotCategories(adminMotCategories.split(",").map((s) => s.trim()).filter(Boolean));
         setTimeout(() => setSaveStatusMsg(""), 2000);
       } else {
-        setSaveStatusMsg("SAVE FAILED.");
+        setSaveStatusMsg("SAVE FAILED (SAVED LOCALLY).");
+        setTimeout(() => setSaveStatusMsg(""), 2000);
       }
     } catch (e) {
-      setSaveStatusMsg("SERVER DISCONNECTED.");
+      setSaveStatusMsg("SAVED LOCALLY (OFFLINE PWA).");
+      setTimeout(() => setSaveStatusMsg(""), 2500);
     }
   };
 
@@ -1680,12 +1911,50 @@ export default function App() {
               >
                 <span>OVERVIEW TEXT</span>
               </button>
+              <button
+                className={`border-b-[2px] !w-auto !h-[50px] font-bold text-[13px] uppercase transition-colors ${currentAdminTab === "BACKUP" ? "border-[#fff] text-[#fff]" : "border-transparent text-[#777] hover:text-[#bbb]"}`}
+                onClick={() => {
+                  setCurrentAdminTab("BACKUP");
+                  clearCharForm();
+                }}
+              >
+                <span>BACKUP & RESTORE</span>
+              </button>
             </div>
           </div>
-          <div style={{ paddingRight: '10px' }} className="flex flex-wrap gap-[12px] items-center">
+          <div style={{ paddingRight: '10px' }} className="flex flex-wrap gap-[10px] items-center">
             <span className="text-[#aaa] text-[11px] font-mono font-bold">
               {saveStatusMsg}
             </span>
+            <button
+              style={{ paddingLeft: '12px', paddingRight: '12px' }}
+              className="mech-btn !w-auto !h-[34px] !mb-0 !text-[#eee] border-[#444] bg-[#1a1a1a] hover:bg-[#282828] hover:border-[#888] font-bold text-[11px] flex items-center gap-1.5"
+              onClick={handleExportData}
+              title="現在の全データ（作品・設定）をJSONファイルとしてダウンロード保存します"
+            >
+              <Download size={13} />
+              <span>EXPORT JSON</span>
+            </button>
+            <button
+              style={{ paddingLeft: '12px', paddingRight: '12px' }}
+              className="mech-btn !w-auto !h-[34px] !mb-0 !text-[#eee] border-[#444] bg-[#1a1a1a] hover:bg-[#282828] hover:border-[#888] font-bold text-[11px] flex items-center gap-1.5"
+              onClick={() => jsonFileInputRef.current?.click()}
+              title="バックアップしたJSONファイルを選択して復元・インポートします"
+            >
+              <Upload size={13} />
+              <span>IMPORT JSON</span>
+            </button>
+            <input
+              ref={jsonFileInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files && e.target.files[0]) {
+                  handleImportFile(e.target.files[0]);
+                }
+              }}
+            />
             <button
               style={{ paddingLeft: '14px', paddingRight: '14px' }}
               className="mech-btn !w-auto !h-[34px] !mb-0 !text-[#eee] border-[#666] bg-[#222] hover:bg-[#333] hover:border-[#888] font-bold text-[12px]"
@@ -1898,6 +2167,178 @@ export default function App() {
                   value={adminAboutText}
                   onChange={(e) => setAdminAboutText(e.target.value)}
                 ></textarea>
+              </div>
+            </div>
+          ) : currentAdminTab === "BACKUP" ? (
+            <div className="flex-1 flex flex-col gap-[20px] p-[10px] md:p-[24px] h-full overflow-y-auto">
+              <div className="flex flex-col gap-1 border-b border-[#242424] pb-4">
+                <div className="text-[#eee] font-['Orbitron'] text-[18px] tracking-widest font-bold flex items-center gap-2.5">
+                  <Database size={20} className="text-[#888]" />
+                  <span>SYSTEM ARCHIVE BACKUP & RESTORE PROTOCOL</span>
+                </div>
+                <div className="text-[#888] text-[12px] font-mono">
+                  全作品データ（19機体スペック、CGアート、モーション動画、設定ストーリー、ロゴ、表示設定）を1つのJSONファイルとして端末へダウンロード保存、または過去のバックアップファイルからワンクリックで復元します。
+                </div>
+              </div>
+
+              {/* Telemetry Stat Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                <div className="bg-[#101010] border border-[#262626] p-3 flex flex-col gap-1">
+                  <span className="text-[#666] text-[10px] font-mono uppercase tracking-wider">UNIT ARCHIVES</span>
+                  <span className="text-[#fff] text-[18px] font-mono font-bold">{units.length} UNITS</span>
+                </div>
+                <div className="bg-[#101010] border border-[#262626] p-3 flex flex-col gap-1">
+                  <span className="text-[#666] text-[10px] font-mono uppercase tracking-wider">CG ARTWORKS</span>
+                  <span className="text-[#fff] text-[18px] font-mono font-bold">{artSet.length} ARTS</span>
+                </div>
+                <div className="bg-[#101010] border border-[#262626] p-3 flex flex-col gap-1">
+                  <span className="text-[#666] text-[10px] font-mono uppercase tracking-wider">MOVIE DATA</span>
+                  <span className="text-[#fff] text-[18px] font-mono font-bold">{motSet.length} CLIPS</span>
+                </div>
+                <div className="bg-[#101010] border border-[#262626] p-3 flex flex-col gap-1">
+                  <span className="text-[#666] text-[10px] font-mono uppercase tracking-wider">LOGO SET</span>
+                  <span className="text-[#fff] text-[18px] font-mono font-bold">{logoSet.length} LOGOS</span>
+                </div>
+                <div className="bg-[#101010] border border-[#262626] p-3 flex flex-col gap-1">
+                  <span className="text-[#666] text-[10px] font-mono uppercase tracking-wider">WORLDVIEW</span>
+                  <span className="text-[#fff] text-[18px] font-mono font-bold">{storyJp.length} / {storyEn.length} L</span>
+                </div>
+                <div className="bg-[#101010] border border-[#262626] p-3 flex flex-col gap-1">
+                  <span className="text-[#666] text-[10px] font-mono uppercase tracking-wider">STORAGE STATUS</span>
+                  <span className="text-[#00ffaa] text-[13px] font-mono font-bold tracking-tight">SAVED LOCALLY</span>
+                </div>
+              </div>
+
+              {/* Main 2-Column Action Cards */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                {/* EXPORT CARD */}
+                <div className="bg-[#121212] border border-[#2c2c2c] p-5 flex flex-col justify-between gap-4">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2 text-[#fff] font-['Orbitron'] font-bold text-[14px] tracking-wider">
+                      <Download size={16} className="text-[#888]" />
+                      <span>EXPORT BACKUP DATA (エクスポート)</span>
+                    </div>
+                    <p className="text-[#888] text-[12px] font-mono leading-relaxed">
+                      現在アプリに登録されている全ての機体・画像・動画・テキスト設定をまとめた最新のJSONバックアップファイルを端末にダウンロード保存します。
+                    </p>
+                    <div className="text-[11px] text-[#666] font-mono">
+                      * 出力形式: space-robotman-backup-YYYY-MM-DD.json<br />
+                      * PWAオフライン環境でもそのままローカル保存が可能です。
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-3 pt-3 border-t border-[#222]">
+                    <button
+                      className="mech-btn !w-auto !h-[38px] !mb-0 !text-[#000] !bg-[#fff] border-[#fff] hover:!bg-[#ddd] px-5 font-bold text-[12px] flex items-center gap-2"
+                      onClick={handleExportData}
+                    >
+                      <Download size={14} />
+                      <span>DOWNLOAD BACKUP FILE (.JSON)</span>
+                    </button>
+                    <button
+                      className="mech-btn !w-auto !h-[38px] !mb-0 !text-[#ccc] border-[#444] bg-[#1a1a1a] hover:bg-[#252525] px-4 font-bold text-[11px] flex items-center gap-2"
+                      onClick={handleCopyJsonToClipboard}
+                    >
+                      {copiedBackup ? <Check size={14} className="text-[#00ffaa]" /> : <Copy size={14} />}
+                      <span>{copiedBackup ? "COPIED TO CLIPBOARD!" : "COPY JSON TO CLIPBOARD"}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* IMPORT CARD */}
+                <div className="bg-[#121212] border border-[#2c2c2c] p-5 flex flex-col justify-between gap-4">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2 text-[#fff] font-['Orbitron'] font-bold text-[14px] tracking-wider">
+                      <Upload size={16} className="text-[#888]" />
+                      <span>IMPORT BACKUP DATA (インポート / 復元)</span>
+                    </div>
+                    <p className="text-[#888] text-[12px] font-mono leading-relaxed">
+                      以前エクスポートしたバックアップJSONファイルを読み込み、作品データや設定を即座にアプリ全体へ復元・同期します。
+                    </p>
+                  </div>
+
+                  {/* Dropzone */}
+                  <div
+                    className="h-[120px] border border-dashed border-[#3e3e3e] bg-[#0c0c0c] flex flex-col items-center justify-center text-center text-[#777] cursor-pointer p-4 hover:border-[#777] transition-colors gap-2"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                        handleImportFile(e.dataTransfer.files[0]);
+                      }
+                    }}
+                    onClick={() => jsonFileInputRef.current?.click()}
+                  >
+                    <FileJson size={28} className="text-[#555]" />
+                    <div className="text-[12px] text-[#ccc] font-mono font-bold">
+                      CLICK TO SELECT FILE OR DRAG & DROP .JSON HERE
+                    </div>
+                    <div className="text-[10px] text-[#666] font-mono">
+                      (対応形式: space-robotman-backup-*.json または同等データ)
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ADMIN PIN CONFIGURATION */}
+              <div className="bg-[#101010] border border-[#222] p-4 flex flex-col gap-3 mt-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1c1c1c] pb-2.5">
+                  <div className="flex items-center gap-2 text-[#eee] text-[13px] font-mono font-bold">
+                    <Lock size={15} className="text-[#aaa]" />
+                    <span>ADMIN PASSCODE CONFIGURATION (管理者暗証番号の設定)</span>
+                  </div>
+                  <div className="text-[11px] text-[#777] font-mono">
+                    CURRENT PIN: <span className="text-[#00ffcc] font-bold tracking-[2px]">{adminPin || "0000"}</span>
+                  </div>
+                </div>
+                <div className="text-[11px] text-[#888] font-mono leading-relaxed">
+                  トップ画面から管理画面へ入る際に要求される4桁の暗証番号を設定します。（初期値: <span className="text-white font-bold">0000</span>）
+                </div>
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <div className="flex items-center gap-2 bg-[#0a0a0a] border border-[#333] px-3 py-1.5">
+                    <span className="text-[11px] text-[#666] font-mono">NEW 4-DIGIT PIN:</span>
+                    <input
+                      type="password"
+                      maxLength={4}
+                      pattern="[0-9]*"
+                      inputMode="numeric"
+                      placeholder="例: 1234"
+                      className="bg-transparent text-white font-mono text-center tracking-[4px] text-[14px] w-[90px] focus:outline-none placeholder:text-[#444] placeholder:tracking-normal"
+                      value={newAdminPinInput}
+                      onChange={(e) => setNewAdminPinInput(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
+                    />
+                  </div>
+                  <button
+                    className="mech-btn !w-auto !h-[36px] !mb-0 text-[#fff] border-[#555] bg-[#1c1c1c] hover:bg-[#282828] hover:border-[#888] px-4 font-bold text-[11px] flex items-center gap-1.5"
+                    onClick={() => handleUpdateAdminPin(newAdminPinInput)}
+                  >
+                    <Check size={13} />
+                    <span>UPDATE PIN (暗証番号を変更)</span>
+                  </button>
+                  {pinChangeSuccessMsg && (
+                    <div className="text-[11px] text-[#00ffcc] font-mono font-bold animate-fade-in">
+                      {pinChangeSuccessMsg}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* FACTORY RESET & SAFETY SECTION */}
+              <div className="bg-[#101010] border border-[#222] p-4 flex flex-wrap items-center justify-between gap-4 mt-2">
+                <div className="flex flex-col gap-1 max-w-xl">
+                  <div className="text-[#ccc] text-[12px] font-mono font-bold flex items-center gap-2">
+                    <RefreshCw size={14} className="text-[#777]" />
+                    <span>RESTORE FACTORY DEFAULT DATA (初期データ再構築)</span>
+                  </div>
+                  <div className="text-[#666] text-[11px] font-mono">
+                    手動変更を破棄して、同梱されているオリジナルの作品データ（全19機体・全アート・全モーション）に戻したい場合はこちらを実行します。
+                  </div>
+                </div>
+                <button
+                  className="mech-btn !w-auto !h-[34px] !mb-0 text-[#aaa] border-[#444] bg-[#181818] hover:bg-[#252525] hover:text-[#fff] px-4 font-bold text-[11px]"
+                  onClick={handleResetToDefault}
+                >
+                  <span>RESET TO FACTORY DEFAULT</span>
+                </button>
               </div>
             </div>
           ) : (
@@ -2200,6 +2641,91 @@ export default function App() {
           )}
         </div>
         </div>
+
+        {/* IMPORT CONFIRMATION MODAL */}
+        {importPendingData && (
+          <div className="fixed inset-0 z-[1000] bg-black/85 flex items-center justify-center p-4">
+            <div className="bg-[#121212] border border-[#444] shadow-[0_0_50px_rgba(0,0,0,0.9)] max-w-lg w-full p-6 flex flex-col gap-4 font-mono">
+              <div className="flex items-center gap-2 text-[#fff] font-['Orbitron'] font-bold text-[16px] border-b border-[#2e2e2e] pb-3">
+                <Upload size={18} className="text-[#eee]" />
+                <span>CONFIRM DATA RESTORATION</span>
+              </div>
+              <div className="text-[12px] text-[#aaa] leading-relaxed">
+                バックアップファイル <span className="text-[#fff] font-bold">「{importFileName}」</span> の内容をシステムにインポートして適用しますか？
+              </div>
+              <div className="bg-[#0a0a0a] border border-[#262626] p-4 text-[12px] text-[#ccc] flex flex-col gap-2">
+                <div className="flex justify-between border-b border-[#1a1a1a] pb-1">
+                  <span className="text-[#777]">UNIT ARCHIVES (機体数):</span>
+                  <span className="font-bold text-[#fff]">{Array.isArray(importPendingData.units) ? importPendingData.units.length : 0} UNITS</span>
+                </div>
+                <div className="flex justify-between border-b border-[#1a1a1a] pb-1">
+                  <span className="text-[#777]">CG ARTWORKS (アート):</span>
+                  <span className="font-bold text-[#fff]">{Array.isArray(importPendingData.artSet) ? importPendingData.artSet.length : 0} ITEMS</span>
+                </div>
+                <div className="flex justify-between border-b border-[#1a1a1a] pb-1">
+                  <span className="text-[#777]">MOVIE DATA (動画):</span>
+                  <span className="font-bold text-[#fff]">{Array.isArray(importPendingData.motSet) ? importPendingData.motSet.length : 0} CLIPS</span>
+                </div>
+                <div className="flex justify-between border-b border-[#1a1a1a] pb-1">
+                  <span className="text-[#777]">LOGO ASSETS (ロゴ):</span>
+                  <span className="font-bold text-[#fff]">{Array.isArray(importPendingData.logoSet) ? importPendingData.logoSet.length : 0} LOGOS</span>
+                </div>
+                <div className="flex justify-between border-b border-[#1a1a1a] pb-1">
+                  <span className="text-[#777]">SYSTEM LOGO:</span>
+                  <span className="font-bold text-[#fff] truncate max-w-[200px]">{importPendingData.systemLogo || "DEFAULT"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#777]">EXPORTED DATE:</span>
+                  <span className="font-bold text-[#888]">{importPendingData.exportedAt || "UNKNOWN"}</span>
+                </div>
+              </div>
+              <div className="text-[11px] text-[#ff9966]">
+                ※ 適用すると、現在登録されている作品データが上記バックアップの内容に更新され、端末のローカル領域へ保存されます。
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  className="mech-btn !w-auto !h-[36px] !mb-0 text-[#888] border-[#333] hover:text-[#eee] px-4 font-bold text-[12px]"
+                  onClick={() => {
+                    setImportPendingData(null);
+                    setImportFileName("");
+                    if (jsonFileInputRef.current) jsonFileInputRef.current.value = "";
+                  }}
+                >
+                  CANCEL (キャンセル)
+                </button>
+                <button
+                  className="mech-btn !w-auto !h-[36px] !mb-0 !text-[#000] !bg-[#fff] border-[#fff] hover:!bg-[#ddd] px-5 font-bold text-[12px]"
+                  onClick={() => applyImportedData(importPendingData)}
+                >
+                  RESTORE (復元を適用)
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* IMPORT ERROR MODAL */}
+        {importErrorMsg && (
+          <div className="fixed inset-0 z-[1000] bg-black/85 flex items-center justify-center p-4">
+            <div className="bg-[#181010] border border-[#662222] p-6 max-w-md w-full flex flex-col gap-3 font-mono">
+              <div className="flex items-center gap-2 text-[#ff6666] font-bold text-[15px]">
+                <AlertCircle size={18} />
+                <span>IMPORT ERROR</span>
+              </div>
+              <div className="text-[12px] text-[#ccc] leading-relaxed">
+                {importErrorMsg}
+              </div>
+              <div className="flex justify-end pt-2">
+                <button
+                  className="mech-btn !w-auto !h-[34px] !mb-0 !text-[#fff] border-[#666] px-4 font-bold text-[12px]"
+                  onClick={() => setImportErrorMsg("")}
+                >
+                  CLOSE
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
     );
   };
@@ -2464,22 +2990,111 @@ export default function App() {
                       <span className="nav-idx">05 //</span>
                       <span className="nav-label">OVERVIEW</span>
                     </button>
+                    <button
+                      className="mech-nav-btn hover:border-[#555] mt-1 text-[#aaa] hover:text-white"
+                      onClick={() => setCurrentScreen("splash")}
+                      title="オープニングトップ画面へ戻る"
+                    >
+                      <span className="nav-idx text-[#888]">◀ //</span>
+                      <span className="nav-label">OPENING TOP</span>
+                    </button>
                   </div>
                 </div>
 
                 <div className="nav-group flex-none">
-                  <button
-                    className="mech-btn w-full mb-[4px] hover:border-[#555]"
-                    onClick={() => setCurrentScreen("admin")}
-                  >
-                    <span>ADMIN LOGIN</span>
-                  </button>
-                  <button
-                    className="mech-btn w-full hover:border-[#555]"
-                    onClick={() => setCurrentScreen("splash")}
-                  >
-                    <span>OPENING TOP</span>
-                  </button>
+                  {/* MASTER ONLY ACCESS */}
+                  <div className="mb-[4px] flex flex-col gap-2 bg-[#121212] p-2.5 border border-[#2a2a2a]">
+                    <div className="flex items-center justify-between text-[9px] font-mono border-b border-[#222] pb-1.5">
+                      <span className="text-[#bbb] font-['Orbitron'] font-bold tracking-wider">
+                        MASTER ONLY ACCESS
+                      </span>
+                      <span className="text-[#555] font-mono text-[8px] tracking-widest">
+                        4-DIGIT PIN
+                      </span>
+                    </div>
+
+                    {/* CONNECTED 4-SLOT INPUT WITH CENTER LINE IN EACH */}
+                    <div
+                      className="relative flex items-center justify-center my-1 cursor-pointer select-none"
+                      onClick={() => sidebarPinRef.current?.focus()}
+                      title="4桁の暗証番号を入力 (初期値: 0000)"
+                    >
+                      <input
+                        ref={sidebarPinRef}
+                        type="password"
+                        maxLength={4}
+                        pattern="[0-9]*"
+                        inputMode="numeric"
+                        value={sidebarPinInput}
+                        onFocus={() => setIsSidebarPinFocused(true)}
+                        onBlur={() => setIsSidebarPinFocused(false)}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 4);
+                          setSidebarPinInput(val);
+                          setPinErrorMessage("");
+                          if (val.length === 4) {
+                            attemptAdminLogin(val);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            attemptAdminLogin(sidebarPinInput);
+                          }
+                        }}
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                        autoComplete="off"
+                      />
+                      <div
+                        className={`grid grid-cols-4 w-full h-[34px] border transition-colors bg-transparent ${
+                          pinErrorMessage
+                            ? "border-[#ff4444] bg-[#1a0808]"
+                            : isSidebarPinFocused
+                            ? "border-[#555]"
+                            : "border-[#2e2e2e]"
+                        }`}
+                      >
+                        {[0, 1, 2, 3].map((idx) => {
+                          const char = sidebarPinInput[idx];
+                          return (
+                            <div
+                              key={idx}
+                              className="flex items-center justify-center border-r last:border-r-0 border-[#262626] font-mono text-[13px] font-bold"
+                            >
+                              {char ? (
+                                <span className="text-white text-[11px]">●</span>
+                              ) : (
+                                <span className="w-2.5 h-[2px] bg-[#444] inline-block"></span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {pinErrorMessage ? (
+                      <div className="text-[9px] text-[#ff6666] font-mono tracking-tight text-center py-0.5">
+                        {pinErrorMessage}
+                      </div>
+                    ) : (
+                      <div className="text-[8px] text-[#555] font-mono text-center tracking-wider">
+                        ENTER 4-DIGIT SECURITY CODE
+                      </div>
+                    )}
+
+                    <button
+                      className="mech-btn w-full !mb-0 !h-[30px] hover:border-[#666] flex items-center justify-center text-[10px] font-bold tracking-wider uppercase text-[#ccc] hover:text-[#fff]"
+                      onClick={() => {
+                        if (!sidebarPinInput) {
+                          setShowPinModal(true);
+                        } else {
+                          attemptAdminLogin(sidebarPinInput);
+                        }
+                      }}
+                      title="暗証番号を入力して管理画面へログイン (未入力でキーパッド表示)"
+                    >
+                      <span>ADMIN LOGIN</span>
+                    </button>
+                  </div>
                   <div className="flex flex-col mt-[12px] px-2 bg-[#101010] p-2 border border-[#242424]">
                     <div className="flex items-center justify-between text-[8px] font-mono text-[#666] mb-1">
                       <span>CHRONO TELEMETRY</span>
@@ -2528,7 +3143,151 @@ export default function App() {
         </section>
       )}
 
+      {/* SECURITY CLEARANCE PIN MODAL */}
+      {showPinModal && (
+        <div className="fixed inset-0 z-[1100] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#121212] border border-[#3a3a3a] shadow-[0_0_50px_rgba(0,0,0,0.9)] max-w-sm w-full p-6 flex flex-col gap-4 font-mono">
+            <div className="flex items-center justify-between border-b border-[#2a2a2a] pb-3">
+              <div className="flex items-center gap-2 text-[#fff] font-['Orbitron'] font-bold text-[13px] tracking-wider">
+                <span>MASTER ONLY ACCESS</span>
+              </div>
+              <button
+                onClick={() => {
+                  setShowPinModal(false);
+                  setModalPinInput("");
+                  setModalPinError("");
+                }}
+                className="text-[#666] hover:text-[#fff] text-[16px] px-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="text-[12px] text-[#aaa] text-center">
+              管理画面（ADMIN）に入るための4桁の暗証番号を入力してください。
+            </div>
+
+            {/* PIN display slots */}
+            <div className="flex justify-center py-2">
+              <div
+                className={`grid grid-cols-4 w-52 h-12 border bg-transparent ${
+                  modalPinError ? "border-[#ff4444] bg-[#1a0808]" : "border-[#333]"
+                }`}
+              >
+                {[0, 1, 2, 3].map((idx) => {
+                  const char = modalPinInput[idx];
+                  return (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-center border-r last:border-r-0 border-[#262626] font-mono text-lg font-bold"
+                    >
+                      {char ? (
+                        <span className="text-white">●</span>
+                      ) : (
+                        <span className="w-3.5 h-[2px] bg-[#444] inline-block"></span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {modalPinError && (
+              <div className="text-[11px] text-[#ff5555] font-bold text-center animate-fade-in">
+                {modalPinError}
+              </div>
+            )}
+
+            <div className="text-[10px] text-[#666] text-center">
+              ※ 初期暗証番号は「0000」です。管理画面内から変更可能です。
+            </div>
+
+            {/* Numeric Keypad for Mobile & Touch */}
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                <button
+                  key={num}
+                  type="button"
+                  onClick={() => {
+                    if (modalPinInput.length < 4) {
+                      const next = modalPinInput + num.toString();
+                      setModalPinInput(next);
+                      setModalPinError("");
+                      if (next.length === 4) {
+                        attemptAdminLogin(next);
+                      }
+                    }
+                  }}
+                  className="h-11 bg-[#181818] hover:bg-[#282828] border border-[#2e2e2e] hover:border-[#666] text-[#eee] font-mono text-[16px] font-bold transition-colors"
+                >
+                  {num}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setModalPinInput("");
+                  setModalPinError("");
+                }}
+                className="h-11 bg-[#141414] hover:bg-[#202020] border border-[#2e2e2e] text-[#888] font-mono text-[11px] font-bold transition-colors"
+              >
+                CLEAR
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (modalPinInput.length < 4) {
+                    const next = modalPinInput + "0";
+                    setModalPinInput(next);
+                    setModalPinError("");
+                    if (next.length === 4) {
+                      attemptAdminLogin(next);
+                    }
+                  }
+                }}
+                className="h-11 bg-[#181818] hover:bg-[#282828] border border-[#2e2e2e] hover:border-[#666] text-[#eee] font-mono text-[16px] font-bold transition-colors"
+              >
+                0
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setModalPinInput((prev) => prev.slice(0, -1));
+                  setModalPinError("");
+                }}
+                className="h-11 bg-[#141414] hover:bg-[#202020] border border-[#2e2e2e] text-[#888] font-mono text-[14px] flex items-center justify-center transition-colors"
+              >
+                ⌫
+              </button>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                className="mech-btn !w-auto flex-1 !h-[38px] !mb-0 text-[#888] border-[#333] hover:text-[#eee] font-bold text-[12px]"
+                onClick={() => {
+                  setShowPinModal(false);
+                  setModalPinInput("");
+                  setModalPinError("");
+                }}
+              >
+                CANCEL (戻る)
+              </button>
+              <button
+                type="button"
+                className="mech-btn !w-auto flex-1 !h-[38px] !mb-0 !text-[#fff] !bg-[#242424] border-[#555] hover:!bg-[#323232] hover:border-[#888] font-bold text-[12px]"
+                onClick={() => attemptAdminLogin(modalPinInput)}
+              >
+                LOGIN (認証)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {currentScreen === "admin" && renderAdminScreen()}
+      <OfflineIndicator />
     </div>
   );
 }
