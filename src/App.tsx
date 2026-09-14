@@ -273,7 +273,14 @@ export default function App() {
   }, []);
 
   const handleInstallPWA = async () => {
-    if (!deferredPrompt) return;
+    if (!deferredPrompt) {
+      if (window.matchMedia("(display-mode: standalone)").matches) {
+        alert("SPACE ROBOTMAN WORLD ARCHIVES はすでにPWAアプリとして起動しています。");
+      } else {
+        alert("ブラウザのアドレスバー右側にある「インストール」アイコン（または設定メニューの『アプリをインストール』）をクリックしてPWAアプリとしてインストールできます。");
+      }
+      return;
+    }
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === "accepted") {
@@ -2395,16 +2402,14 @@ export default function App() {
                 <span className="header-sub bg-[#1a1a1a] px-2.5 py-1 border border-[#2a2a2a] text-[#888]">
                   SYSTEM ARCHIVE
                 </span>
-                {deferredPrompt && !isAppInstalled && (
-                  <button
-                    onClick={handleInstallPWA}
-                    title="Install SPACE ROBOTMAN WORLD ARCHIVES PWA"
-                    className="mech-btn !w-auto !h-[28px] !mb-0 px-3 flex items-center gap-1.5 text-[10px] font-mono tracking-wider font-bold !bg-[var(--emerald-primary)] !text-black !border-[var(--emerald-primary)] hover:!bg-white hover:!border-white cursor-pointer shadow-[0_0_10px_rgba(0,255,170,0.3)] animate-pulse"
-                  >
-                    <Zap size={12} className="fill-current" />
-                    <span>INSTALL APP</span>
-                  </button>
-                )}
+                <button
+                  onClick={handleInstallPWA}
+                  title="Install SPACE ROBOTMAN WORLD ARCHIVES PWA"
+                  className="mech-btn !w-auto !h-[28px] !mb-0 px-3 flex items-center gap-1.5 text-[10px] font-mono tracking-wider font-bold !bg-[var(--emerald-primary)] !text-black !border-[var(--emerald-primary)] hover:!bg-white hover:!border-white cursor-pointer shadow-[0_0_10px_rgba(0,255,170,0.3)]"
+                >
+                  <Zap size={12} className="fill-current" />
+                  <span>{isAppInstalled ? "PWA INSTALLED" : "INSTALL APP"}</span>
+                </button>
                 <button
                   onClick={toggleFullscreen}
                   title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
