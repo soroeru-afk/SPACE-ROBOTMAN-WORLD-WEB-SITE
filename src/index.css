@@ -436,3 +436,64 @@ body {
   flex-direction: column;
   gap: 4px;
 }
+
+/* TOP SCREEN / DASHBOARD ENTRANCE ANIMATIONS */
+@keyframes slideInHeaderLeft {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInHeaderRight {
+  0% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInSidebarWithDelay {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInContent {
+  0% {
+    opacity: 0;
+    transform: scale(0.99);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.anim-header-left {
+  animation: slideInHeaderLeft 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.anim-header-right {
+  animation: slideInHeaderRight 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.anim-sidebar-enter {
+  animation: slideInSidebarWithDelay 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.4s both;
+}
+
+.anim-content-enter {
+  animation: fadeInContent 0.65s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both;
+}

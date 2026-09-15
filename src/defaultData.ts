@@ -8,6 +8,8 @@ export interface Unit {
   desc: string;
   descJp: string;
   file: string;
+  imageScale?: number;
+  imageOffsetY?: number;
 }
 
 export interface StoryStyle {
@@ -43,10 +45,12 @@ export interface AppData {
   systemLogo: string;
   logoSet: string[];
   adminPin?: string;
+  globalUnitScale?: number;
 }
 
 export const defaultAppData: AppData = {
   adminPin: "0000",
+  globalUnitScale: 100,
   units: [
     {
       name: "ROBOTMAN-ORIGIN",
@@ -306,6 +310,7 @@ export function loadInitialData(): AppData {
             logoSet: parsed.logoSet && parsed.logoSet.length > 0 ? parsed.logoSet : defaultAppData.logoSet,
             systemLogo: parsed.systemLogo && parsed.systemLogo.trim() !== "" ? parsed.systemLogo : defaultAppData.systemLogo,
             adminPin: (parsed.adminPin && typeof parsed.adminPin === "string" && parsed.adminPin.length === 4) ? parsed.adminPin : (defaultAppData.adminPin || "0000"),
+            globalUnitScale: typeof parsed.globalUnitScale === "number" ? parsed.globalUnitScale : 100,
           };
         }
       }

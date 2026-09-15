@@ -67,6 +67,7 @@ const defaultStoryStyle = {
   lineHeightAbout: "2.5",
   marginBottomAbout: "200px",
   letterSpacingAboutTitle: "0.05em",
+  overviewMaxWidth: "896px",
 };
 const defaultAboutLines = [
   "PROJECT: SPACE ROBOTMAN WORLD",
@@ -80,6 +81,32 @@ const defaultMotCats = ["TECH", "RECON"];
 export const DEFAULT_SYSTEM_LOGO = "assets/logos/imageSSS.png";
 
 const initialCachedData = loadInitialData();
+
+const mergeUnitScales = (loadedUnits: any[]): any[] => {
+  if (typeof window === "undefined" || !Array.isArray(loadedUnits)) return loadedUnits;
+  try {
+    const savedMap = localStorage.getItem("space_robotman_unit_scales");
+    if (!savedMap) return loadedUnits;
+    const parsed = JSON.parse(savedMap);
+    if (!parsed || typeof parsed !== "object") return loadedUnits;
+    return loadedUnits.map((u) => {
+      const key = u.name || u.file;
+      if (parsed[key] !== undefined) {
+        const item = parsed[key];
+        const scale = typeof item === "object" ? item.scale : item;
+        const offsetY = typeof item === "object" ? item.offsetY : undefined;
+        return {
+          ...u,
+          imageScale: u.imageScale !== undefined ? u.imageScale : scale,
+          imageOffsetY: u.imageOffsetY !== undefined ? u.imageOffsetY : offsetY,
+        };
+      }
+      return u;
+    });
+  } catch (e) {
+    return loadedUnits;
+  }
+};
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState("splash"); // splash, story, boot, dash, admin
@@ -102,7 +129,48 @@ export default function App() {
   const [motCategories, setMotCategories] = useState<string[]>(() => initialCachedData.motCategories || defaultMotCats);
   const [systemLogo, setSystemLogo] = useState<string>(() => initialCachedData.systemLogo || DEFAULT_SYSTEM_LOGO);
 
-  const [units, setUnits] = useState<any[]>(() => (initialCachedData.units && initialCachedData.units.length > 0) ? initialCachedData.units : defaultAppData.units);
+  // Global unit scale state (defaults to cached/default, allows admin global scaling)
+  const [globalUnitScale, setGlobalUnitScale] = useState<number>(() => {
+    if (typeof initialCachedData.globalUnitScale === "number" && !isNaN(initialCachedData.globalUnitScale)) {
+      return initialCachedData.globalUnitScale;
+    }
+    return 100;
+  });
+  // Sidebar "OPENING TOP" 4-second auto-reverting confirmation state (Emerald Green)
+  const [openingTopCountdown, setOpeningTopCountdown] = useState<number | null>(null);
+  const openingTopTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleOpeningTopClick = () => {
+    if (openingTopCountdown === null) {
+      setOpeningTopCountdown(4);
+      if (openingTopTimerRef.current) clearInterval(openingTopTimerRef.current);
+      let remaining = 4;
+      openingTopTimerRef.current = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          if (openingTopTimerRef.current) clearInterval(openingTopTimerRef.current);
+          setOpeningTopCountdown(null);
+        } else {
+          setOpeningTopCountdown(remaining);
+        }
+      }, 1000);
+    } else {
+      if (openingTopTimerRef.current) clearInterval(openingTopTimerRef.current);
+      setOpeningTopCountdown(null);
+      setCurrentScreen("splash");
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (openingTopTimerRef.current) clearInterval(openingTopTimerRef.current);
+    };
+  }, []);
+
+  const [units, setUnits] = useState<any[]>(() => {
+    const base = (initialCachedData.units && initialCachedData.units.length > 0) ? initialCachedData.units : defaultAppData.units;
+    return mergeUnitScales(base);
+  });
   const [artSet, setArtSet] = useState<string[]>(() => (initialCachedData.artSet && initialCachedData.artSet.length > 0) ? initialCachedData.artSet : defaultAppData.artSet);
   const [motSet, setMotSet] = useState<string[]>(() => (initialCachedData.motSet && initialCachedData.motSet.length > 0) ? initialCachedData.motSet : defaultAppData.motSet);
   const [logoSet, setLogoSet] = useState<string[]>(() => (initialCachedData.logoSet && initialCachedData.logoSet.length > 0) ? initialCachedData.logoSet : defaultAppData.logoSet);
@@ -196,7 +264,7 @@ export default function App() {
       })
       .then((data) => {
         if (data) {
-          if (Array.isArray(data.units) && data.units.length > 0) setUnits(data.units);
+          if (Array.isArray(data.units) && data.units.length > 0) setUnits(mergeUnitScales(data.units));
           if (Array.isArray(data.artSet) && data.artSet.length > 0) setArtSet(data.artSet);
           if (Array.isArray(data.motSet) && data.motSet.length > 0) setMotSet(data.motSet);
           if (Array.isArray(data.logoSet) && data.logoSet.length > 0) setLogoSet(data.logoSet);
@@ -214,6 +282,9 @@ export default function App() {
           if (data.motCategories) setMotCategories(data.motCategories);
           if (data.systemLogo && data.systemLogo.trim() !== "") {
             setSystemLogo(data.systemLogo);
+          }
+          if (typeof data.globalUnitScale === "number" && !isNaN(data.globalUnitScale)) {
+            setGlobalUnitScale(data.globalUnitScale);
           }
           saveToLocalData(data);
         }
@@ -248,13 +319,157 @@ export default function App() {
 
   const [activeCharFilter, setActiveCharFilter] = useState("ALL");
   const [selectedChar, setSelectedChar] = useState<any>(null);
-  const [charViewMode, setCharViewMode] = useState<"DETAIL" | "GRID" | "LIST">("DETAIL");
+
+  // Persisted view mode for UNIT-ARCHIVES (DETAIL / GRID / LIST)
+  const [charViewMode, setCharViewModeState] = useState<"DETAIL" | "GRID" | "LIST">(() => {
+    try {
+      const saved = localStorage.getItem("space_robotman_char_view_mode");
+      if (saved === "DETAIL" || saved === "GRID" || saved === "LIST") return saved;
+    } catch (e) {}
+    return "DETAIL";
+  });
+  const setCharViewMode = (mode: "DETAIL" | "GRID" | "LIST") => {
+    setCharViewModeState(mode);
+    try {
+      localStorage.setItem("space_robotman_char_view_mode", mode);
+    } catch (e) {}
+  };
+
+  // Persisted list view scale for UNIT-ARCHIVES (S / M / L / XL)
+  const [charListSize, setCharListSizeState] = useState<"S" | "M" | "L" | "XL">(() => {
+    try {
+      const saved = localStorage.getItem("space_robotman_char_list_size");
+      if (saved === "S" || saved === "M" || saved === "L" || saved === "XL") return saved;
+    } catch (e) {}
+    return "M";
+  });
+  const setCharListSize = (size: "S" | "M" | "L" | "XL") => {
+    setCharListSizeState(size);
+    try {
+      localStorage.setItem("space_robotman_char_list_size", size);
+    } catch (e) {}
+  };
+
   const [charSearchQuery, setCharSearchQuery] = useState("");
 
   const [activeArtFilter, setActiveArtFilter] = useState("ALL");
   const [selectedArt, setSelectedArt] = useState<string | null>(null);
-  const [artViewMode, setArtViewMode] = useState<"SLIDE" | "TILES">("SLIDE");
-  const [artTileSize, setArtTileSize] = useState<"S" | "M" | "L">("M");
+
+  // Persisted view mode for CG-ARTWORKS (SLIDE / TILES)
+  const [artViewMode, setArtViewModeState] = useState<"SLIDE" | "TILES">(() => {
+    try {
+      const saved = localStorage.getItem("space_robotman_art_view_mode");
+      if (saved === "SLIDE" || saved === "TILES") return saved;
+    } catch (e) {}
+    return "SLIDE";
+  });
+  const setArtViewMode = (mode: "SLIDE" | "TILES") => {
+    setArtViewModeState(mode);
+    try {
+      localStorage.setItem("space_robotman_art_view_mode", mode);
+    } catch (e) {}
+  };
+
+  // Persisted tile size for CG-ARTWORKS (S / M / L)
+  const [artTileSize, setArtTileSizeState] = useState<"S" | "M" | "L">(() => {
+    try {
+      const saved = localStorage.getItem("space_robotman_art_tile_size");
+      if (saved === "S" || saved === "M" || saved === "L") return saved;
+    } catch (e) {}
+    return "M";
+  });
+  const setArtTileSize = (size: "S" | "M" | "L") => {
+    setArtTileSizeState(size);
+    try {
+      localStorage.setItem("space_robotman_art_tile_size", size);
+    } catch (e) {}
+  };
+
+  // Individual unit scale and vertical offset helpers
+  const getUnitScale = (unit: any): number => {
+    if (!unit) return 100;
+    if (typeof unit.imageScale === "number" && !isNaN(unit.imageScale)) {
+      return unit.imageScale;
+    }
+    try {
+      const savedMap = localStorage.getItem("space_robotman_unit_scales");
+      if (savedMap) {
+        const parsed = JSON.parse(savedMap);
+        const key = unit.name || unit.file;
+        if (parsed && parsed[key] !== undefined) {
+          if (typeof parsed[key] === "object" && typeof parsed[key].scale === "number") {
+            return parsed[key].scale;
+          } else if (typeof parsed[key] === "number") {
+            return parsed[key];
+          }
+        }
+      }
+    } catch (e) {}
+    return 100;
+  };
+
+  const getUnitOffsetY = (unit: any): number => {
+    if (!unit) return 0;
+    if (typeof unit.imageOffsetY === "number" && !isNaN(unit.imageOffsetY)) {
+      return unit.imageOffsetY;
+    }
+    try {
+      const savedMap = localStorage.getItem("space_robotman_unit_scales");
+      if (savedMap) {
+        const parsed = JSON.parse(savedMap);
+        const key = unit.name || unit.file;
+        if (parsed && parsed[key] !== undefined && typeof parsed[key] === "object" && typeof parsed[key].offsetY === "number") {
+          return parsed[key].offsetY;
+        }
+      }
+    } catch (e) {}
+    return 0;
+  };
+
+  const updateUnitScaleAndOffset = (unitToUpdate: any, newScale: number, newOffsetY?: number) => {
+    if (!unitToUpdate) return;
+    const clampedScale = Math.max(30, Math.min(180, Math.round(newScale)));
+    const currentOffsetY = getUnitOffsetY(unitToUpdate);
+    const clampedOffsetY = Math.max(-120, Math.min(120, Math.round(newOffsetY !== undefined ? newOffsetY : currentOffsetY)));
+
+    const updatedUnits = units.map((u) => {
+      if ((unitToUpdate.name && u.name === unitToUpdate.name) || (unitToUpdate.file && u.file === unitToUpdate.file)) {
+        return {
+          ...u,
+          imageScale: clampedScale,
+          imageOffsetY: clampedOffsetY,
+        };
+      }
+      return u;
+    });
+    setUnits(updatedUnits);
+
+    const updatedCurrent = updatedUnits.find(
+      (u) =>
+        (unitToUpdate.name && u.name === unitToUpdate.name) ||
+        (unitToUpdate.file && u.file === unitToUpdate.file)
+    );
+    if (updatedCurrent) {
+      setSelectedChar(updatedCurrent);
+    }
+
+    try {
+      const key = unitToUpdate.name || unitToUpdate.file;
+      const savedMapStr = localStorage.getItem("space_robotman_unit_scales");
+      const currentMap = savedMapStr ? JSON.parse(savedMapStr) : {};
+      currentMap[key] = { scale: clampedScale, offsetY: clampedOffsetY };
+      localStorage.setItem("space_robotman_unit_scales", JSON.stringify(currentMap));
+    } catch (e) {}
+
+    saveToLocalData({ units: updatedUnits });
+
+    fetch("/api/update_data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ units: updatedUnits }),
+    }).catch(() => {});
+  };
+
   const [artModalImage, setArtModalImage] = useState<string | null>(null);
 
   const getFilteredArt = () => {
@@ -300,8 +515,21 @@ export default function App() {
           : units.filter(
               (u) => u.faction && u.faction.startsWith(activeCharFilter),
             );
-      if (filtered.length > 0 && !filtered.includes(selectedChar)) {
-        setSelectedChar(filtered[0]);
+      if (filtered.length > 0) {
+        const stillSelected = selectedChar
+          ? filtered.find(
+              (u) =>
+                (selectedChar.name && u.name === selectedChar.name) ||
+                (selectedChar.file && u.file === selectedChar.file),
+            )
+          : null;
+        if (stillSelected) {
+          if (selectedChar !== stillSelected) {
+            setSelectedChar(stillSelected);
+          }
+        } else {
+          setSelectedChar(filtered[0]);
+        }
       }
     } else if (currentNav === "ART") {
       if (artSet.length > 0 && !selectedArt) setSelectedArt(artSet[0]);
@@ -359,6 +587,29 @@ export default function App() {
             </div>
 
             <div className="h-5 w-[1px] bg-[#2e2e2e]"></div>
+
+            {/* List View Scaling Controls (when in LIST mode) */}
+            {charViewMode === "LIST" && (
+              <div className="flex items-center gap-1 bg-[#161616] border border-[#2e2e2e] p-0.5">
+                <span className="text-[9px] text-[#666] font-mono tracking-wider px-1.5 uppercase">
+                  SIZE:
+                </span>
+                {(["S", "M", "L", "XL"] as const).map((size) => (
+                  <button
+                    key={size}
+                    onClick={() => setCharListSize(size)}
+                    className={`w-6 h-5 text-[10px] font-mono font-bold transition-all cursor-pointer ${
+                      charListSize === size
+                        ? "bg-[#fff] text-black shadow-sm"
+                        : "text-[#777] hover:text-[#bbb] hover:bg-[#222]"
+                    }`}
+                    title={`リスト表示倍率: ${size}`}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="flex items-center gap-2">
               <button
@@ -566,7 +817,12 @@ export default function App() {
 
         {currentNav === "OVER" && (
           <div id="overview-well" className="w-full h-full flex justify-center bg-[#020202]/50">
-            <div className="p-[40px] flex flex-col gap-[40px] h-full overflow-y-auto max-w-4xl w-full bg-[#000]">
+            <div 
+              className="p-[40px] flex flex-col gap-[40px] h-full overflow-y-auto w-full bg-[#000] transition-all"
+              style={{
+                maxWidth: storyStyle.overviewMaxWidth || "896px",
+              }}
+            >
               <div
                 className="border-l-2 border-[#fff] py-[60px]"
                 style={{ marginLeft: "30px", paddingLeft: "40px" }}
@@ -578,13 +834,21 @@ export default function App() {
                   WORLDVIEW // 世界観
                 </h2>
                 <div
-                  className="text-[#ccc] leading-[2.2] mb-[80px] max-w-2xl"
-                  style={{ fontSize: storyStyle.fontSizeJp, fontFamily: storyStyle.fontFamilyJp }}
+                  className="text-[#ccc] leading-[2.2] mb-[80px]"
+                  style={{ 
+                    fontSize: storyStyle.fontSizeJp, 
+                    fontFamily: storyStyle.fontFamilyJp,
+                    maxWidth: storyStyle.overviewMaxWidth === "100%" ? "100%" : "min(100%, 1400px)"
+                  }}
                   dangerouslySetInnerHTML={{ __html: storyJp.join("<br><br>") }}
                 ></div>
                 <div
-                  className={`text-[#888] leading-[2] max-w-3xl ${storyStyle.isItalicEn ? "italic" : ""}`}
-                  style={{ fontSize: storyStyle.fontSizeEn, fontFamily: storyStyle.fontFamilyEn }}
+                  className={`text-[#888] leading-[2] ${storyStyle.isItalicEn ? "italic" : ""}`}
+                  style={{ 
+                    fontSize: storyStyle.fontSizeEn, 
+                    fontFamily: storyStyle.fontFamilyEn,
+                    maxWidth: storyStyle.overviewMaxWidth === "100%" ? "100%" : "min(100%, 1400px)"
+                  }}
                   dangerouslySetInnerHTML={{ __html: storyEn.join("<br><br>") }}
                 ></div>
               </div>
@@ -956,108 +1220,175 @@ export default function App() {
             )}
 
             {/* 2. LIST VIEW MODE */}
-            {charViewMode === "LIST" && (
-              <div className="w-full h-full flex flex-col min-h-0 relative z-10">
-                <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-[#262626] px-1 shrink-0">
-                  <div className="flex items-center gap-3">
-                    <span className="font-['Orbitron'] text-[12px] text-white tracking-widest font-bold">
-                      DATA REGISTRY
-                    </span>
-                    <span className="text-[10px] text-[#888] font-mono">
-                      // {getFilteredUnits().length} RECORDS
-                    </span>
-                  </div>
-                  <div className="text-[9px] text-[#666] font-mono">
-                    INDEX // SERIAL IDENTIFIER
-                  </div>
-                </div>
+            {charViewMode === "LIST" && (() => {
+              const listConfig = {
+                S: {
+                  thumb: "w-10 h-10",
+                  padding: "p-2",
+                  titleSize: "text-[12px]",
+                  badgeSize: "text-[7px]",
+                  roleSize: "text-[9px]",
+                  showDesc: false,
+                  statsSize: "text-[8px]",
+                  gap: "gap-1",
+                },
+                M: {
+                  thumb: "w-14 h-14",
+                  padding: "p-2.5",
+                  titleSize: "text-[13px]",
+                  badgeSize: "text-[8px]",
+                  roleSize: "text-[10px]",
+                  showDesc: true,
+                  statsSize: "text-[9px]",
+                  gap: "gap-1.5",
+                },
+                L: {
+                  thumb: "w-20 h-20",
+                  padding: "p-3.5",
+                  titleSize: "text-[15px]",
+                  badgeSize: "text-[9px]",
+                  roleSize: "text-[11px]",
+                  showDesc: true,
+                  statsSize: "text-[10px]",
+                  gap: "gap-2",
+                },
+                XL: {
+                  thumb: "w-28 h-28",
+                  padding: "p-4",
+                  titleSize: "text-[17px]",
+                  badgeSize: "text-[10px]",
+                  roleSize: "text-[12px]",
+                  showDesc: true,
+                  statsSize: "text-[11px]",
+                  gap: "gap-2.5",
+                },
+              }[charListSize];
 
-                <div className="flex-1 overflow-y-auto pr-2 pb-4">
-                  {getFilteredUnits().length === 0 ? (
-                    <div className="w-full h-64 flex flex-col items-center justify-center text-[#555] font-mono gap-2">
-                      <Search size={28} />
-                      <div className="font-['Orbitron'] tracking-widest text-[13px]">NO UNITS FOUND</div>
-                      <button 
-                        onClick={() => { setActiveCharFilter("ALL"); setCharSearchQuery(""); }}
-                        className="mech-btn !w-auto px-4 mt-2 !h-[26px]"
-                      >
-                        <span>RESET FILTERS</span>
-                      </button>
+              return (
+                <div className="w-full h-full flex flex-col min-h-0 relative z-10">
+                  <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-[#262626] px-1 shrink-0">
+                    <div className="flex items-center gap-3">
+                      <span className="font-['Orbitron'] text-[12px] text-white tracking-widest font-bold">
+                        DATA REGISTRY
+                      </span>
+                      <span className="text-[10px] text-[#888] font-mono">
+                        // {getFilteredUnits().length} RECORDS
+                      </span>
                     </div>
-                  ) : (
-                    <div className="flex flex-col gap-1.5">
-                      {getFilteredUnits().map((u: any, i: number) => {
-                        const stats = getUnitStats(u.name);
-                        return (
-                          <div
-                            key={i}
-                            onClick={() => {
-                              setSelectedChar(u);
-                              setCharViewMode("DETAIL");
-                            }}
-                            className="group bg-[#161616] hover:bg-[#1c1c1c] border border-[#262626] hover:border-[#555] p-2.5 flex items-center justify-between gap-4 cursor-pointer transition-all shadow-sm"
+                    <div className="flex items-center gap-3">
+                      {/* Scale switcher in list header */}
+                      <div className="flex items-center gap-1 bg-[#141414] border border-[#2e2e2e] p-0.5">
+                        <span className="text-[9px] text-[#777] font-mono tracking-wider px-1.5 uppercase">
+                          SCALE:
+                        </span>
+                        {(["S", "M", "L", "XL"] as const).map((size) => (
+                          <button
+                            key={size}
+                            onClick={() => setCharListSize(size)}
+                            className={`px-2 h-5 text-[9px] font-mono font-bold transition-all cursor-pointer ${
+                              charListSize === size
+                                ? "bg-[var(--emerald-primary)] text-black font-bold shadow-sm"
+                                : "text-[#777] hover:text-[#bbb] hover:bg-[#222]"
+                            }`}
+                            title={`リスト表示倍率: ${size}`}
                           >
-                            <div className="flex items-center gap-3 min-w-0">
-                              {/* Square Thumb */}
-                              <div className="w-10 h-10 bg-[#0c0c0c] border border-[#262626] shrink-0 flex items-center justify-center p-0.5 group-hover:border-[#444]">
-                                <img
-                                  src={u.file}
-                                  alt={u.name}
-                                  className="max-h-full max-w-full object-contain"
-                                />
-                              </div>
-
-                              {/* Unit Meta */}
-                              <div className="flex flex-col min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-['Orbitron'] text-[13px] text-white font-bold tracking-wider group-hover:text-white transition-colors truncate">
-                                    {u.name}
-                                  </span>
-                                  <span className="text-[8px] font-mono px-1.5 py-0.5 bg-[#202020] border border-[#333] text-[#aaa] shrink-0">
-                                    {u.faction || "UNKNOWN"}
-                                  </span>
-                                </div>
-                                <div className="text-[10px] text-[#777] font-mono truncate mt-0.5">
-                                  {u.role || "--"} // {u.descJp ? u.descJp.slice(0, 48) + "..." : "--"}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Right Status & Action */}
-                            <div className="flex items-center gap-5 shrink-0">
-                              <div className="hidden md:flex items-center gap-4 text-[9px] font-mono text-[#777]">
-                                <div className="flex flex-col items-center">
-                                  <span className="text-[#555] text-[8px]">PWR</span>
-                                  <span>{stats.power}%</span>
-                                </div>
-                                <div className="flex flex-col items-center">
-                                  <span className="text-[#555] text-[8px]">ARM</span>
-                                  <span>{stats.armor}%</span>
-                                </div>
-                                <div className="flex flex-col items-center">
-                                  <span className="text-[#555] text-[8px]">SPD</span>
-                                  <span>{stats.speed}%</span>
-                                </div>
-                              </div>
-
-                              <button className="mech-btn !w-auto px-3 !h-[26px] !mb-0 border-[#333] group-hover:border-[#666] group-hover:text-white transition-colors">
-                                <span className="text-[9px]">DETAILS</span>
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
+                            {size}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="hidden sm:block text-[9px] text-[#666] font-mono">
+                        INDEX // SERIAL IDENTIFIER
+                      </div>
                     </div>
-                  )}
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto pr-2 pb-4">
+                    {getFilteredUnits().length === 0 ? (
+                      <div className="w-full h-64 flex flex-col items-center justify-center text-[#555] font-mono gap-2">
+                        <Search size={28} />
+                        <div className="font-['Orbitron'] tracking-widest text-[13px]">NO UNITS FOUND</div>
+                        <button 
+                          onClick={() => { setActiveCharFilter("ALL"); setCharSearchQuery(""); }}
+                          className="mech-btn !w-auto px-4 mt-2 !h-[26px]"
+                        >
+                          <span>RESET FILTERS</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className={`flex flex-col ${listConfig.gap}`}>
+                        {getFilteredUnits().map((u: any, i: number) => {
+                          const stats = getUnitStats(u.name);
+                          return (
+                            <div
+                              key={i}
+                              onClick={() => {
+                                setSelectedChar(u);
+                                setCharViewMode("DETAIL");
+                              }}
+                              className={`group bg-[#161616] hover:bg-[#1c1c1c] border border-[#262626] hover:border-[#555] ${listConfig.padding} flex items-center justify-between gap-4 cursor-pointer transition-all shadow-sm`}
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                {/* Scalable Thumb */}
+                                <div className={`${listConfig.thumb} bg-[#0c0c0c] border border-[#262626] shrink-0 flex items-center justify-center p-1 group-hover:border-[#555] transition-colors relative`}>
+                                  <img
+                                    src={u.file}
+                                    alt={u.name}
+                                    className="max-h-full max-w-full object-contain filter drop-shadow-md group-hover:scale-105 transition-transform duration-200"
+                                  />
+                                </div>
+
+                                {/* Unit Meta */}
+                                <div className="flex flex-col min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`font-['Orbitron'] ${listConfig.titleSize} text-white font-bold tracking-wider group-hover:text-white transition-colors truncate`}>
+                                      {u.name}
+                                    </span>
+                                    <span className={`${listConfig.badgeSize} font-mono px-1.5 py-0.5 bg-[#202020] border border-[#333] text-[#aaa] shrink-0`}>
+                                      {u.faction || "UNKNOWN"}
+                                    </span>
+                                  </div>
+                                  <div className={`${listConfig.roleSize} text-[#777] font-mono truncate mt-0.5`}>
+                                    {u.role || "--"} {listConfig.showDesc && u.descJp ? ` // ${u.descJp.slice(0, charListSize === "XL" ? 80 : 48)}...` : ""}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Right Status & Action */}
+                              <div className="flex items-center gap-5 shrink-0">
+                                <div className={`hidden md:flex items-center gap-4 ${listConfig.statsSize} font-mono text-[#777]`}>
+                                  <div className="flex flex-col items-center">
+                                    <span className="text-[#555] text-[8px]">PWR</span>
+                                    <span>{stats.power}%</span>
+                                  </div>
+                                  <div className="flex flex-col items-center">
+                                    <span className="text-[#555] text-[8px]">ARM</span>
+                                    <span>{stats.armor}%</span>
+                                  </div>
+                                  <div className="flex flex-col items-center">
+                                    <span className="text-[#555] text-[8px]">SPD</span>
+                                    <span>{stats.speed}%</span>
+                                  </div>
+                                </div>
+
+                                <button className="mech-btn !w-auto px-3.5 !h-[28px] !mb-0 border-[#333] group-hover:border-[#666] group-hover:text-white transition-colors">
+                                  <span className="text-[9px]">DETAILS</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* 3. TERMINAL DETAIL VIEW MODE */}
             {charViewMode === "DETAIL" && (
               <div className="archive-box bg-[#141414] border border-[#2a2a2a] p-4 shadow-sm w-full h-full flex gap-4 relative z-10 overflow-hidden">
-                {/* LEFT: Quick Unit Selector with Thumbnails */}
-                <div className="archive-scroller w-[280px] shrink-0 overflow-y-auto border-r border-[#242424] pr-3 flex flex-col gap-1.5" id="char-master-list">
+                {/* LEFT: Quick Unit Selector with Enlarged Thumbnails */}
+                <div className="archive-scroller w-[330px] shrink-0 overflow-y-auto border-r border-[#242424] pr-3 flex flex-col gap-1.5" id="char-master-list">
                   <div className="flex items-center justify-between pb-2 border-b border-[#242424] px-1 shrink-0">
                     <span className="text-[9px] text-[#777] font-mono tracking-widest font-bold">
                       UNITS // {getFilteredUnits().length}
@@ -1071,26 +1402,47 @@ export default function App() {
                     </button>
                   </div>
                   {getFilteredUnits().map((u: any, i: number) => {
-                    const isSelected = selectedChar === u;
+                    const isSelected =
+                      selectedChar &&
+                      ((selectedChar.name && u.name === selectedChar.name) ||
+                        (selectedChar.file && u.file === selectedChar.file));
                     return (
                       <button
                         key={i}
-                        className={`w-full text-left p-2 border transition-all flex items-center gap-2 ${
+                        className={`w-full text-left p-2 border transition-all flex items-center gap-2.5 group cursor-pointer ${
                           isSelected
-                            ? "bg-[#202020] border-[#666] border-l-2 border-l-[var(--emerald-primary)] text-white"
+                            ? "bg-[#182624] border-[var(--emerald-dim)] border-l-[3px] border-l-[var(--emerald-primary)] text-white shadow-[0_0_12px_rgba(0,237,232,0.15)]"
                             : "bg-[#111] border-[#222] hover:border-[#3a3a3a] text-[#888] hover:text-[#ddd]"
                         }`}
                         onClick={() => setSelectedChar(u)}
                       >
-                        <div className={`w-8 h-8 shrink-0 bg-[#0c0c0c] border overflow-hidden flex items-center justify-center p-0.5 ${isSelected ? "border-[#555]" : "border-[#222]"}`}>
-                          <img src={u.file} alt={u.name} className="max-h-full max-w-full object-contain" />
+                        {/* Enriched & Enlarged Character Image Icon (56px) */}
+                        <div className={`w-14 h-14 shrink-0 bg-[#080808] border overflow-hidden flex items-center justify-center p-1 relative transition-colors ${isSelected ? "border-[var(--emerald-primary)] bg-[#0a1514]" : "border-[#282828] group-hover:border-[#444]"}`}>
+                          <img
+                            src={u.file}
+                            alt={u.name}
+                            className="max-h-full max-w-full object-contain filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] transition-transform duration-200 group-hover:scale-105"
+                          />
                         </div>
                         <div className="flex flex-col min-w-0 flex-1">
-                          <span className={`truncate font-['Orbitron'] text-[11px] ${isSelected ? "text-white font-bold" : ""}`}>
-                            {u.name}
-                          </span>
-                          <span className="text-[8px] text-[#666] font-mono truncate">
-                            {u.faction || "--"}
+                          <div className="flex items-center justify-between gap-1 mb-0.5">
+                            <span className={`truncate font-['Orbitron'] text-[12px] ${isSelected ? "text-white font-bold" : "text-[#ccc] group-hover:text-white"}`}>
+                              {u.name}
+                            </span>
+                            <span className="text-[8px] font-mono text-[#555] shrink-0">
+                              #{String(i + 1).padStart(2, "0")}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="text-[8px] font-mono px-1.5 py-0.2 bg-[#1a1a1a] border border-[#333] text-[#aaa] shrink-0 truncate max-w-[100px]">
+                              {u.faction || "--"}
+                            </span>
+                            <span className="text-[8px] text-[var(--emerald-primary)] font-mono">
+                              {getUnitScale(u)}%
+                            </span>
+                          </div>
+                          <span className="text-[9px] text-[#777] font-mono truncate">
+                            {u.role || "--"}
                           </span>
                         </div>
                       </button>
@@ -1106,35 +1458,142 @@ export default function App() {
                   {selectedChar && (
                     <>
                       {/* Center Viewport */}
-                      <div className="flex-1 bg-[#0c0c0c] border border-[#242424] flex flex-col relative overflow-hidden">
-                        {/* Viewport Header Telemetry */}
-                        <div className="flex items-center justify-between px-3 py-2 border-b border-[#202020] bg-[#111] z-10 text-[9px] font-mono text-[#666]">
+                      <div className="flex-1 bg-[#0c0c0c] border border-[#242424] flex flex-col min-h-0 relative overflow-hidden">
+                        {/* Viewport Header Telemetry & Calibration HUD */}
+                        <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#202020] bg-[#111] z-10 text-[9px] font-mono text-[#666] flex-wrap gap-2">
                           <div className="flex items-center gap-2">
                             <span className="w-1.5 h-1.5 bg-[var(--emerald-primary)]"></span>
                             <span className="text-[#ccc] font-bold tracking-widest">OPTICAL APERTURE</span>
+                            <span className="text-[#555] hidden sm:inline">// CALIBRATION</span>
                           </div>
-                          <div>FEED: PRIMARY // SPECTRUM: STANDARD</div>
+
+                          {/* Individual Unit Image Size / Bottom Fit Calibration HUD */}
+                          <div className="flex items-center gap-1.5 bg-[#0a0a0a] border border-[#2a2a2a] px-2 py-0.5">
+                            <span className="text-[9px] font-mono text-[#777] uppercase tracking-wider">
+                              SIZE:
+                            </span>
+                            <button
+                              onClick={() => {
+                                const cur = getUnitScale(selectedChar);
+                                updateUnitScaleAndOffset(selectedChar, cur - 5);
+                              }}
+                              className="w-5 h-4.5 bg-[#181818] hover:bg-[#282828] text-white border border-[#333] hover:border-[#666] flex items-center justify-center text-[11px] font-bold cursor-pointer transition-colors"
+                              title="縮小 (-5%) 下が切れる場合は小さく調整"
+                            >
+                              -
+                            </button>
+                            <span className="text-[10px] font-mono font-bold text-white w-9 text-center">
+                              {getUnitScale(selectedChar)}%
+                            </span>
+                            <button
+                              onClick={() => {
+                                const cur = getUnitScale(selectedChar);
+                                updateUnitScaleAndOffset(selectedChar, cur + 5);
+                              }}
+                              className="w-5 h-4.5 bg-[#181818] hover:bg-[#282828] text-white border border-[#333] hover:border-[#666] flex items-center justify-center text-[11px] font-bold cursor-pointer transition-colors"
+                              title="拡大 (+5%)"
+                            >
+                              +
+                            </button>
+
+                            <div className="w-[1px] h-3.5 bg-[#262626] mx-0.5"></div>
+
+                            <span className="text-[9px] font-mono text-[#777] uppercase tracking-wider hidden md:inline">
+                              POS:
+                            </span>
+                            <button
+                              onClick={() => {
+                                const curScale = getUnitScale(selectedChar);
+                                const curOffset = getUnitOffsetY(selectedChar);
+                                updateUnitScaleAndOffset(selectedChar, curScale, curOffset - 8);
+                              }}
+                              className="w-5 h-4.5 bg-[#181818] hover:bg-[#282828] text-[#aaa] hover:text-white border border-[#333] hover:border-[#666] flex items-center justify-center text-[9px] cursor-pointer transition-colors"
+                              title="上へ移動（下の見切れを解消）"
+                            >
+                              ▲
+                            </button>
+                            <button
+                              onClick={() => {
+                                const curScale = getUnitScale(selectedChar);
+                                const curOffset = getUnitOffsetY(selectedChar);
+                                updateUnitScaleAndOffset(selectedChar, curScale, curOffset + 8);
+                              }}
+                              className="w-5 h-4.5 bg-[#181818] hover:bg-[#282828] text-[#aaa] hover:text-white border border-[#333] hover:border-[#666] flex items-center justify-center text-[9px] cursor-pointer transition-colors"
+                              title="下へ移動"
+                            >
+                              ▼
+                            </button>
+
+                            <div className="w-[1px] h-3.5 bg-[#262626] mx-0.5"></div>
+
+                            {/* Quick Presets */}
+                            {([100, 90, 80] as const).map((pct) => {
+                              const active = getUnitScale(selectedChar) === pct && getUnitOffsetY(selectedChar) === 0;
+                              return (
+                                <button
+                                  key={pct}
+                                  onClick={() => updateUnitScaleAndOffset(selectedChar, pct, 0)}
+                                  className={`px-1.5 h-4.5 text-[9px] font-mono font-bold transition-colors cursor-pointer ${
+                                    active
+                                      ? "bg-[#fff] text-black"
+                                      : "text-[#777] hover:text-white hover:bg-[#1a1a1a]"
+                                  }`}
+                                  title={`${pct}%に設定（位置リセット）`}
+                                >
+                                  {pct}%
+                                </button>
+                              );
+                            })}
+
+                            <div className="w-[1px] h-3.5 bg-[#262626] mx-0.5"></div>
+
+                            {/* Always visible neutral reset button */}
+                            <button
+                              onClick={() => updateUnitScaleAndOffset(selectedChar, 100, 0)}
+                              className={`px-2 h-4.5 text-[9px] font-mono font-bold transition-all cursor-pointer ${
+                                getUnitScale(selectedChar) === 100 && getUnitOffsetY(selectedChar) === 0
+                                  ? "text-[#555] hover:text-[#888]"
+                                  : "bg-[#1f1f1f] hover:bg-[#2a2a2a] text-[#ddd] hover:text-white border border-[#3a3a3a]"
+                              }`}
+                              title="初期値 (100%, Y:0) にリセット"
+                            >
+                              RESET
+                            </button>
+                          </div>
                         </div>
 
                         {/* Corner HUD Brackets - Square Industrial */}
-                        <div className="absolute top-10 left-3 w-3 h-3 border-t border-l border-[#555] pointer-events-none"></div>
-                        <div className="absolute top-10 right-3 w-3 h-3 border-t border-r border-[#555] pointer-events-none"></div>
+                        <div className="absolute top-12 left-3 w-3 h-3 border-t border-l border-[#555] pointer-events-none"></div>
+                        <div className="absolute top-12 right-3 w-3 h-3 border-t border-r border-[#555] pointer-events-none"></div>
                         <div className="absolute bottom-10 left-3 w-3 h-3 border-b border-l border-[#555] pointer-events-none"></div>
                         <div className="absolute bottom-10 right-3 w-3 h-3 border-b border-r border-[#555] pointer-events-none"></div>
 
                         {/* Central Visual Focus */}
-                        <div className="flex-1 flex items-center justify-center p-6 relative">
-                          <img
-                            src={selectedChar.file}
-                            className="max-h-full max-w-full object-contain filter drop-shadow-lg transition-transform duration-300 hover:scale-102"
-                            alt={selectedChar.name}
-                          />
+                        <div className="flex-1 min-h-0 w-full flex items-center justify-center p-4 md:p-6 pb-6 relative overflow-hidden">
+                          <div
+                            className="relative w-full h-full flex items-center justify-center transition-transform duration-150"
+                            style={{
+                              transform: `scale(${((getUnitScale(selectedChar) / 100) * (globalUnitScale / 100))}) translateY(${getUnitOffsetY(selectedChar)}px)`,
+                              transformOrigin: "center center",
+                            }}
+                          >
+                            <img
+                              src={selectedChar.file}
+                              className="max-h-full max-w-full object-contain filter drop-shadow-lg pointer-events-none select-none transition-transform duration-300"
+                              style={{
+                                maxHeight: "calc(100% - 10px)",
+                              }}
+                              alt={selectedChar.name}
+                            />
+                          </div>
                         </div>
 
                         {/* Viewport Footer Telemetry */}
                         <div className="px-3 py-1.5 border-t border-[#1a1a1a] bg-[#101010] flex items-center justify-between text-[8px] font-mono text-[#555] z-10">
                           <div>DATA RECORD: SYNCHRONIZED</div>
-                          <div className="tracking-wider text-[#777]">CLASSIFICATION: UNRESTRICTED</div>
+                          <div className="tracking-wider text-[#777]">
+                            APERTURE: {getUnitScale(selectedChar)}%{globalUnitScale !== 100 ? ` [GLOBAL: ${globalUnitScale}%]` : ""} // OFFSET: {getUnitOffsetY(selectedChar)}PX
+                          </div>
                         </div>
                       </div>
 
@@ -1229,7 +1688,11 @@ export default function App() {
                           <button
                             onClick={() => {
                               const list = getFilteredUnits();
-                              const idx = list.indexOf(selectedChar);
+                              const idx = list.findIndex(
+                                (u) =>
+                                  (selectedChar?.name && u.name === selectedChar.name) ||
+                                  (selectedChar?.file && u.file === selectedChar.file),
+                              );
                               if (idx > 0) setSelectedChar(list[idx - 1]);
                               else setSelectedChar(list[list.length - 1]);
                             }}
@@ -1249,8 +1712,12 @@ export default function App() {
                           <button
                             onClick={() => {
                               const list = getFilteredUnits();
-                              const idx = list.indexOf(selectedChar);
-                              if (idx < list.length - 1) setSelectedChar(list[idx + 1]);
+                              const idx = list.findIndex(
+                                (u) =>
+                                  (selectedChar?.name && u.name === selectedChar.name) ||
+                                  (selectedChar?.file && u.file === selectedChar.file),
+                              );
+                              if (idx >= 0 && idx < list.length - 1) setSelectedChar(list[idx + 1]);
                               else setSelectedChar(list[0]);
                             }}
                             className="mech-btn !w-auto px-3 !h-[26px] !mb-0 flex items-center gap-1"
@@ -1280,6 +1747,8 @@ export default function App() {
   const [fmRole, setFmRole] = useState("");
   const [fmDesc, setFmDesc] = useState("");
   const [fmDescJp, setFmDescJp] = useState("");
+  const [fmScale, setFmScale] = useState<number>(100);
+  const [fmOffsetY, setFmOffsetY] = useState<number>(0);
 
   const [adminStoryJp, setAdminStoryJp] = useState(storyJp.join("\n\n"));
   const [adminStoryEn, setAdminStoryEn] = useState(storyEn.join("\n\n"));
@@ -1464,6 +1933,7 @@ export default function App() {
       artCategories: adminArtCategories ? adminArtCategories.split(",").map((s) => s.trim()).filter(Boolean) : artCategories,
       motCategories: adminMotCategories ? adminMotCategories.split(",").map((s) => s.trim()).filter(Boolean) : motCategories,
       systemLogo: systemLogo || DEFAULT_SYSTEM_LOGO,
+      globalUnitScale: globalUnitScale || 100,
     };
   };
 
@@ -1595,6 +2065,9 @@ export default function App() {
       if (dataToApply.systemLogo) {
         setSystemLogo(dataToApply.systemLogo);
       }
+      if (typeof dataToApply.globalUnitScale === "number" && !isNaN(dataToApply.globalUnitScale)) {
+        setGlobalUnitScale(dataToApply.globalUnitScale);
+      }
       if (dataToApply.adminPin && typeof dataToApply.adminPin === "string" && dataToApply.adminPin.length === 4) {
         setAdminPin(dataToApply.adminPin);
         try {
@@ -1659,6 +2132,7 @@ export default function App() {
         motCategories: adminMotCategories.split(",").map((s) => s.trim()).filter(Boolean),
         systemLogo: effectiveSystemLogo,
         logoSet: effectiveLogoSet,
+        globalUnitScale: payloadToSave?.globalUnitScale !== undefined ? payloadToSave.globalUnitScale : globalUnitScale,
       };
       saveToLocalData(payload);
       const res = await fetch("/api/update_data", {
@@ -1806,10 +2280,19 @@ export default function App() {
       role: fmRole,
       desc: fmDesc,
       descJp: fmDescJp,
+      imageScale: fmScale,
+      imageOffsetY: fmOffsetY,
     };
     setUnits(arr);
+    try {
+      const key = fmName || arr[adminSelectedCharIndex].file;
+      const savedMapStr = localStorage.getItem("space_robotman_unit_scales");
+      const currentMap = savedMapStr ? JSON.parse(savedMapStr) : {};
+      currentMap[key] = { scale: fmScale, offsetY: fmOffsetY };
+      localStorage.setItem("space_robotman_unit_scales", JSON.stringify(currentMap));
+    } catch (e) {}
     saveAdminData({ units: arr, artSet, motSet });
-    setUploadMsg("METADATA UPDATED!");
+    setUploadMsg("METADATA & SCALE UPDATED!");
   };
 
   const clearCharForm = () => {
@@ -1819,6 +2302,8 @@ export default function App() {
     setFmRole("");
     setFmDesc("");
     setFmDescJp("");
+    setFmScale(100);
+    setFmOffsetY(0);
     setAdminPreviewSrc("");
   };
 
@@ -1859,15 +2344,23 @@ export default function App() {
         id="admin-screen"
         className="fixed inset-0 z-[999] bg-black/80 flex items-center justify-center overflow-hidden"
       >
-        <div className="w-[calc(100%-20px)] md:w-[calc(100%-40px)] h-[calc(100%-20px)] md:h-[calc(100%-40px)] max-w-[1600px] flex flex-col min-w-0 bg-[#0c0c0c] border border-[#2e2e2e] shadow-[0_0_50px_rgba(0,0,0,0.9)] p-[20px] md:p-[30px]">
-          <header className="flex flex-wrap justify-between items-center border-b border-[#282828] shrink-0 gap-4 pb-4">
-          <div className="flex flex-wrap items-center gap-[20px] lg:gap-[30px] h-full min-w-0">
-            <div style={{ paddingLeft: '10px' }} className="text-[#eee] font-['Orbitron'] text-[20px] md:text-[22px] tracking-widest font-bold shrink-0">
+        <div className="w-[calc(100%-20px)] md:w-[calc(100%-40px)] h-[calc(100%-20px)] md:h-[calc(100%-40px)] max-w-[1600px] flex flex-col min-w-0 bg-[#0c0c0c] border border-[#2e2e2e] shadow-[0_0_50px_rgba(0,0,0,0.9)] p-[20px] md:p-[30px] relative">
+          {/* フローを壊さない絶対配置のステータストースト（文字落ち・ズレ防止） */}
+          {saveStatusMsg && (
+            <div className="absolute top-[20px] md:top-[25px] right-[20px] md:right-[30px] z-50 bg-[#061e1b] border border-[var(--emerald-primary)] text-[var(--emerald-primary)] px-4 py-2 font-mono text-[12px] font-bold shadow-[0_0_25px_rgba(0,237,232,0.6)] flex items-center gap-2.5 pointer-events-none transition-all animate-in fade-in slide-in-from-top-2 duration-300">
+              <span className="w-2 h-2 rounded-full bg-[var(--emerald-primary)] shadow-[0_0_8px_var(--emerald-primary)] animate-ping"></span>
+              <span>{saveStatusMsg}</span>
+            </div>
+          )}
+
+          <header className="flex flex-wrap lg:flex-nowrap justify-between items-center border-b border-[#282828] shrink-0 gap-4 pb-4">
+          <div className="flex items-center gap-[15px] lg:gap-[25px] min-w-0 overflow-x-auto no-scrollbar">
+            <div style={{ paddingLeft: '10px' }} className="text-[#eee] font-['Orbitron'] text-[18px] md:text-[20px] tracking-widest font-bold shrink-0">
               ADMIN DASHBOARD
             </div>
-            <div className="flex flex-wrap gap-[10px] lg:gap-[30px] h-full lg:ml-[20px]">
+            <div className="flex gap-[8px] lg:gap-[20px] shrink-0">
               <button
-                className={`border-b-[2px] !w-auto !h-[50px] font-bold text-[13px] uppercase transition-colors ${currentAdminTab === "ART" ? "border-[#fff] text-[#fff]" : "border-transparent text-[#777] hover:text-[#bbb]"}`}
+                className={`border-b-[2px] !w-auto !h-[50px] font-bold text-[13px] uppercase transition-colors whitespace-nowrap ${currentAdminTab === "ART" ? "border-[#fff] text-[#fff]" : "border-transparent text-[#777] hover:text-[#bbb]"}`}
                 onClick={() => {
                   setCurrentAdminTab("ART");
                   clearCharForm();
@@ -1876,7 +2369,7 @@ export default function App() {
                 <span>CG ARTWORKS</span>
               </button>
               <button
-                className={`border-b-[2px] !w-auto !h-[50px] font-bold text-[13px] uppercase transition-colors ${currentAdminTab === "MOTION" ? "border-[#fff] text-[#fff]" : "border-transparent text-[#777] hover:text-[#bbb]"}`}
+                className={`border-b-[2px] !w-auto !h-[50px] font-bold text-[13px] uppercase transition-colors whitespace-nowrap ${currentAdminTab === "MOTION" ? "border-[#fff] text-[#fff]" : "border-transparent text-[#777] hover:text-[#bbb]"}`}
                 onClick={() => {
                   setCurrentAdminTab("MOTION");
                   clearCharForm();
@@ -1885,7 +2378,7 @@ export default function App() {
                 <span>MOVIE DATA</span>
               </button>
               <button
-                className={`border-b-[2px] !w-auto !h-[50px] font-bold text-[13px] uppercase transition-colors ${currentAdminTab === "CHAR" ? "border-[#fff] text-[#fff]" : "border-transparent text-[#777] hover:text-[#bbb]"}`}
+                className={`border-b-[2px] !w-auto !h-[50px] font-bold text-[13px] uppercase transition-colors whitespace-nowrap ${currentAdminTab === "CHAR" ? "border-[#fff] text-[#fff]" : "border-transparent text-[#777] hover:text-[#bbb]"}`}
                 onClick={() => {
                   setCurrentAdminTab("CHAR");
                   clearCharForm();
@@ -1894,7 +2387,7 @@ export default function App() {
                 <span>CAST ROSTER</span>
               </button>
               <button
-                className={`border-b-[2px] !w-auto !h-[50px] font-bold text-[13px] uppercase transition-colors ${currentAdminTab === "LOGO" ? "border-[#fff] text-[#fff]" : "border-transparent text-[#777] hover:text-[#bbb]"}`}
+                className={`border-b-[2px] !w-auto !h-[50px] font-bold text-[13px] uppercase transition-colors whitespace-nowrap ${currentAdminTab === "LOGO" ? "border-[#fff] text-[#fff]" : "border-transparent text-[#777] hover:text-[#bbb]"}`}
                 onClick={() => {
                   setCurrentAdminTab("LOGO");
                   clearCharForm();
@@ -1903,7 +2396,7 @@ export default function App() {
                 <span>SYSTEM LOGO</span>
               </button>
               <button
-                className={`border-b-[2px] !w-auto !h-[50px] font-bold text-[13px] uppercase transition-colors ${currentAdminTab === "OVERVIEW" ? "border-[#fff] text-[#fff]" : "border-transparent text-[#777] hover:text-[#bbb]"}`}
+                className={`border-b-[2px] !w-auto !h-[50px] font-bold text-[13px] uppercase transition-colors whitespace-nowrap ${currentAdminTab === "OVERVIEW" ? "border-[#fff] text-[#fff]" : "border-transparent text-[#777] hover:text-[#bbb]"}`}
                 onClick={() => {
                   setCurrentAdminTab("OVERVIEW");
                   clearCharForm();
@@ -1912,7 +2405,7 @@ export default function App() {
                 <span>OVERVIEW TEXT</span>
               </button>
               <button
-                className={`border-b-[2px] !w-auto !h-[50px] font-bold text-[13px] uppercase transition-colors ${currentAdminTab === "BACKUP" ? "border-[#fff] text-[#fff]" : "border-transparent text-[#777] hover:text-[#bbb]"}`}
+                className={`border-b-[2px] !w-auto !h-[50px] font-bold text-[13px] uppercase transition-colors whitespace-nowrap ${currentAdminTab === "BACKUP" ? "border-[#fff] text-[#fff]" : "border-transparent text-[#777] hover:text-[#bbb]"}`}
                 onClick={() => {
                   setCurrentAdminTab("BACKUP");
                   clearCharForm();
@@ -1922,13 +2415,10 @@ export default function App() {
               </button>
             </div>
           </div>
-          <div style={{ paddingRight: '10px' }} className="flex flex-wrap gap-[10px] items-center">
-            <span className="text-[#aaa] text-[11px] font-mono font-bold">
-              {saveStatusMsg}
-            </span>
+          <div style={{ paddingRight: '10px' }} className="flex gap-[8px] items-center shrink-0">
             <button
               style={{ paddingLeft: '12px', paddingRight: '12px' }}
-              className="mech-btn !w-auto !h-[34px] !mb-0 !text-[#eee] border-[#444] bg-[#1a1a1a] hover:bg-[#282828] hover:border-[#888] font-bold text-[11px] flex items-center gap-1.5"
+              className="mech-btn !w-auto !h-[34px] !mb-0 !text-[#eee] border-[#444] bg-[#1a1a1a] hover:bg-[#282828] hover:border-[#888] font-bold text-[11px] flex items-center gap-1.5 whitespace-nowrap"
               onClick={handleExportData}
               title="現在の全データ（作品・設定）をJSONファイルとしてダウンロード保存します"
             >
@@ -1937,7 +2427,7 @@ export default function App() {
             </button>
             <button
               style={{ paddingLeft: '12px', paddingRight: '12px' }}
-              className="mech-btn !w-auto !h-[34px] !mb-0 !text-[#eee] border-[#444] bg-[#1a1a1a] hover:bg-[#282828] hover:border-[#888] font-bold text-[11px] flex items-center gap-1.5"
+              className="mech-btn !w-auto !h-[34px] !mb-0 !text-[#eee] border-[#444] bg-[#1a1a1a] hover:bg-[#282828] hover:border-[#888] font-bold text-[11px] flex items-center gap-1.5 whitespace-nowrap"
               onClick={() => jsonFileInputRef.current?.click()}
               title="バックアップしたJSONファイルを選択して復元・インポートします"
             >
@@ -1957,14 +2447,18 @@ export default function App() {
             />
             <button
               style={{ paddingLeft: '14px', paddingRight: '14px' }}
-              className="mech-btn !w-auto !h-[34px] !mb-0 !text-[#eee] border-[#666] bg-[#222] hover:bg-[#333] hover:border-[#888] font-bold text-[12px]"
+              className={`mech-btn !w-auto !h-[34px] !mb-0 font-bold text-[12px] whitespace-nowrap transition-all duration-300 ${
+                saveStatusMsg
+                  ? "border-[var(--emerald-primary)] bg-[#042421] !text-[var(--emerald-primary)] shadow-[0_0_15px_rgba(0,237,232,0.4)]"
+                  : "!text-[#eee] border-[#666] bg-[#222] hover:bg-[#333] hover:border-[#888]"
+              }`}
               onClick={() => saveAdminData()}
             >
-              <span>SAVE JSON DATA</span>
+              <span>{saveStatusMsg ? "✓ SAVED" : "SAVE JSON DATA"}</span>
             </button>
             <button
               style={{ paddingLeft: '14px', paddingRight: '14px' }}
-              className="mech-btn !w-auto !h-[34px] !mb-0 text-[#888] border-[#333] bg-[#141414] hover:bg-[#202020] hover:text-[#ccc] font-bold text-[12px]"
+              className="mech-btn !w-auto !h-[34px] !mb-0 text-[#888] border-[#333] bg-[#141414] hover:bg-[#202020] hover:text-[#ccc] font-bold text-[12px] whitespace-nowrap"
               onClick={() => {
                 clearCharForm();
                 setCurrentScreen("dash");
@@ -1984,7 +2478,83 @@ export default function App() {
 
         <div className="flex-1 flex min-h-0 mt-[20px]">
           {currentAdminTab === "OVERVIEW" ? (
-            <div className="flex-1 flex gap-[20px] p-[10px] pr-[20px] h-full">
+            <div className="flex-1 flex flex-col gap-[14px] p-[10px] pr-[20px] h-full min-h-0">
+              {/* Top Bar: Container Width Setting */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-[#141414] border border-[#2c2c2c] px-4 py-2.5 shrink-0 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <span className="font-['Orbitron'] text-[12px] text-white tracking-widest font-bold flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[var(--emerald-primary)] shadow-[0_0_8px_var(--emerald-primary)]"></span>
+                    <span>OVERVIEW DISPLAY WIDTH // コンテナ表示幅</span>
+                  </span>
+                  <span className="text-[11px] font-mono text-[#888]">
+                    （フルスクリーン・大画面時の横幅を調整できます）
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1 bg-[#0c0c0c] border border-[#2a2a2a] p-1">
+                    {[
+                      { label: "896px (標準)", value: "896px" },
+                      { label: "1050px (中)", value: "1050px" },
+                      { label: "1200px (広め)", value: "1200px" },
+                      { label: "1400px (ワイド)", value: "1400px" },
+                      { label: "1600px (特大)", value: "1600px" },
+                      { label: "100% (全幅)", value: "100%" },
+                    ].map((preset) => {
+                      const isActive = (adminStoryStyle.overviewMaxWidth || "896px") === preset.value;
+                      return (
+                        <button
+                          key={preset.value}
+                          type="button"
+                          onClick={() => {
+                            setAdminStoryStyle((prev) => ({
+                              ...prev,
+                              overviewMaxWidth: preset.value,
+                            }));
+                            setStoryStyle((prev) => ({
+                              ...prev,
+                              overviewMaxWidth: preset.value,
+                            }));
+                          }}
+                          className={`px-2.5 py-1 text-[11px] font-mono font-bold transition-all cursor-pointer ${
+                            isActive
+                              ? "bg-[var(--emerald-primary)] text-black shadow-sm"
+                              : "text-[#888] hover:text-[#eee] hover:bg-[#222]"
+                          }`}
+                          title={`横幅を ${preset.value} に設定`}
+                        >
+                          {preset.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* カスタム幅入力 */}
+                  <div className="flex items-center gap-1.5 bg-[#0c0c0c] border border-[#2a2a2a] px-2 py-1">
+                    <span className="text-[10px] text-[#777] font-mono">CUSTOM:</span>
+                    <input
+                      type="text"
+                      className="w-20 bg-[#161616] border border-[#333] text-white text-[11px] font-mono px-2 py-0.5 outline-none text-center focus:border-[var(--emerald-primary)]"
+                      value={adminStoryStyle.overviewMaxWidth || "896px"}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAdminStoryStyle((prev) => ({
+                          ...prev,
+                          overviewMaxWidth: val,
+                        }));
+                        setStoryStyle((prev) => ({
+                          ...prev,
+                          overviewMaxWidth: val,
+                        }));
+                      }}
+                      placeholder="例: 1350px"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 3 Columns: JP, EN, ABOUT */}
+              <div className="flex-1 flex gap-[20px] min-h-0">
               <div className="flex-1 flex flex-col gap-[10px]">
                 <div className="flex justify-between items-center mb-[5px]">
                   <div className="text-[#ccc] font-['Orbitron'] text-[14px]">
@@ -2169,6 +2739,7 @@ export default function App() {
                 ></textarea>
               </div>
             </div>
+          </div>
           ) : currentAdminTab === "BACKUP" ? (
             <div className="flex-1 flex flex-col gap-[20px] p-[10px] md:p-[24px] h-full overflow-y-auto">
               <div className="flex flex-col gap-1 border-b border-[#242424] pb-4">
@@ -2344,7 +2915,7 @@ export default function App() {
           ) : (
             <div className="flex gap-[20px] w-full h-full min-h-0 pb-4">
               {/* LEFT SIDEBAR: UPLOAD/FORM */}
-              <div className="w-[300px] border-r border-[#2a2a2a] flex flex-col gap-[20px] pr-[20px] overflow-y-auto shrink-0">
+              <div className="w-[340px] border-r border-[#2a2a2a] flex flex-col gap-[20px] pr-[20px] overflow-y-auto shrink-0">
                 <div className="flex flex-col gap-[8px]">
                   <div style={{ paddingLeft: '10px' }} className="text-[#888] font-['Orbitron'] font-bold text-[10px] tracking-wide uppercase">Target Category</div>
                   <div style={{ marginLeft: '0px', paddingLeft: '10px' }} className="bg-[#151515] text-[#ccc] border border-[#2e2e2e] p-[10px] text-[13px] font-bold font-mono tracking-widest select-none">
@@ -2477,6 +3048,65 @@ export default function App() {
                       value={fmDescJp}
                       onChange={(e) => setFmDescJp(e.target.value)}
                     ></textarea>
+
+                    {/* TERMINAL IMAGE SIZE & POSITION TUNER */}
+                    <div className="border-t border-[#222] pt-2 mt-1 flex flex-col gap-2 bg-[#0c0c0c] p-2.5 border border-[#1e1e1e]">
+                      <div className="flex items-center justify-between text-[9px] font-mono text-[#888]">
+                        <span className="text-[#ccc] font-bold">TERMINAL IMAGE SIZE (下切れ防止)</span>
+                        <span className="text-white font-bold bg-[#181818] px-1.5 py-0.5 border border-[#333]">{fmScale}%</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={40}
+                          max={160}
+                          step={5}
+                          value={fmScale}
+                          onChange={(e) => setFmScale(Number(e.target.value))}
+                          className="flex-1 accent-white h-1.5 bg-[#222] cursor-pointer"
+                        />
+                        <div className="flex items-center gap-1">
+                          {([100, 90, 80, 75] as const).map((p) => (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => setFmScale(p)}
+                              className={`px-1.5 py-0.5 text-[8px] font-mono border transition-colors ${
+                                fmScale === p
+                                  ? "border-white bg-white text-black font-bold"
+                                  : "border-[#333] text-[#777] hover:text-white hover:border-[#555]"
+                              }`}
+                            >
+                              {p}%
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[9px] font-mono text-[#888] pt-1">
+                        <span className="text-[#aaa]">VERTICAL SHIFT (上下移動)</span>
+                        <span className="text-white font-bold bg-[#181818] px-1.5 py-0.5 border border-[#333]">{fmOffsetY}px</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={-60}
+                          max={60}
+                          step={4}
+                          value={fmOffsetY}
+                          onChange={(e) => setFmOffsetY(Number(e.target.value))}
+                          className="flex-1 accent-white h-1.5 bg-[#222] cursor-pointer"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setFmOffsetY(0)}
+                          className="px-2 py-0.5 text-[8px] font-mono border border-[#333] text-[#777] hover:text-white hover:border-[#555]"
+                        >
+                          CENTER
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="flex gap-[10px] mt-[5px]">
                       <button className="mech-btn flex-1 !h-[30px]" onClick={clearCharForm}>
                         <span className="text-[10px]">CLEAR</span>
@@ -2487,6 +3117,145 @@ export default function App() {
                       >
                         <span className="text-[10px]">UPDATE</span>
                       </button>
+                    </div>
+
+                    {/* GLOBAL UNIT SCALE SLIDER (全機体一括縮小/拡大) */}
+                    <div className="border-t border-[#262626] pt-2.5 mt-2 flex flex-col gap-2 bg-[#0d0d0d] p-2.5 border border-[#222]">
+                      <div className="flex items-center justify-between text-[9px] font-mono text-[#888]">
+                        <span className="text-[#eee] font-bold">ALL UNITS GLOBAL SCALE (全体一括倍率)</span>
+                        <span className="text-white font-bold bg-[#181818] px-1.5 py-0.5 border border-[#333]">
+                          {globalUnitScale}%
+                        </span>
+                      </div>
+                      <div className="text-[8px] font-mono text-[#666]">
+                        個別設定された縦切れ調整を維持したまま、全機体を一括で80%や90%へ縮小できます。
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={50}
+                          max={130}
+                          step={5}
+                          value={globalUnitScale}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setGlobalUnitScale(val);
+                            saveToLocalData({ globalUnitScale: val });
+                            fetch("/api/update_data", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ globalUnitScale: val }),
+                            }).catch(() => {});
+                          }}
+                          className="flex-1 accent-white h-1.5 bg-[#222] cursor-pointer"
+                        />
+                        <div className="flex items-center gap-1">
+                          {([100, 95, 90, 85, 80] as const).map((p) => (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => {
+                                setGlobalUnitScale(p);
+                                saveToLocalData({ globalUnitScale: p });
+                                fetch("/api/update_data", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ globalUnitScale: p }),
+                                }).catch(() => {});
+                              }}
+                              className={`px-1.5 py-0.5 text-[8px] font-mono border transition-colors ${
+                                globalUnitScale === p
+                                  ? "border-white bg-white text-black font-bold"
+                                  : "border-[#333] text-[#777] hover:text-white hover:border-[#555]"
+                              }`}
+                            >
+                              {p}%
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* LIVE SAMPLE PREVIEW (小型リアルタイム検証ボックス) */}
+                      {units.length > 0 && (
+                        <div className="mt-1 bg-[#080808] border border-[#222] p-2 flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between text-[8px] font-mono">
+                            <span className="text-[#888]">SAMPLE PREVIEW (検証機体):</span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                className="px-1 py-0.5 bg-[#1a1a1a] hover:bg-[#282828] border border-[#333] text-[#aaa] hover:text-white text-[8px] transition-colors cursor-pointer"
+                                onClick={() => {
+                                  const total = units.length;
+                                  const nextIdx = (adminSelectedCharIndex <= 0 ? total - 1 : adminSelectedCharIndex - 1);
+                                  setAdminSelectedCharIndex(nextIdx);
+                                  const u = units[nextIdx];
+                                  setAdminPreviewSrc(u.file || "");
+                                  setFmName(u.name || "");
+                                  setFmFact(u.faction || "");
+                                  setFmRole(u.role || "");
+                                  setFmDesc(u.desc || "");
+                                  setFmDescJp(u.descJp || "");
+                                  setFmScale(getUnitScale(u));
+                                  setFmOffsetY(getUnitOffsetY(u));
+                                }}
+                                title="前の機体"
+                              >
+                                ◀
+                              </button>
+                              <span className="text-white font-bold max-w-[110px] truncate text-[9px]">
+                                {units[adminSelectedCharIndex >= 0 ? adminSelectedCharIndex : 0]?.name}
+                              </span>
+                              <button
+                                type="button"
+                                className="px-1 py-0.5 bg-[#1a1a1a] hover:bg-[#282828] border border-[#333] text-[#aaa] hover:text-white text-[8px] transition-colors cursor-pointer"
+                                onClick={() => {
+                                  const total = units.length;
+                                  const nextIdx = (adminSelectedCharIndex >= total - 1 ? 0 : adminSelectedCharIndex + 1);
+                                  setAdminSelectedCharIndex(nextIdx);
+                                  const u = units[nextIdx];
+                                  setAdminPreviewSrc(u.file || "");
+                                  setFmName(u.name || "");
+                                  setFmFact(u.faction || "");
+                                  setFmRole(u.role || "");
+                                  setFmDesc(u.desc || "");
+                                  setFmDescJp(u.descJp || "");
+                                  setFmScale(getUnitScale(u));
+                                  setFmOffsetY(getUnitOffsetY(u));
+                                }}
+                                title="次の機体"
+                              >
+                                ▶
+                              </button>
+                            </div>
+                          </div>
+                          
+                          <div className="relative w-full h-[120px] bg-[#030303] border border-[#1a1a1a] flex items-center justify-center overflow-hidden">
+                            <div className="absolute inset-2 border border-dashed border-[#1c1c1c] pointer-events-none flex items-start justify-end p-0.5">
+                              <span className="text-[7px] font-mono text-[#333]">100% REF</span>
+                            </div>
+                            <img
+                              src={
+                                (adminSelectedCharIndex >= 0 && units[adminSelectedCharIndex]?.file)
+                                  ? units[adminSelectedCharIndex].file
+                                  : units[0]?.file
+                              }
+                              alt="Sample Unit"
+                              style={{
+                                transform: `scale(${((fmScale / 100) * (globalUnitScale / 100))}) translateY(${fmOffsetY}px)`,
+                                transition: "transform 0.15s ease-out",
+                              }}
+                              className="max-w-full max-h-full object-contain filter drop-shadow-[0_0_10px_rgba(255,255,255,0.06)]"
+                            />
+                          </div>
+
+                          <div className="flex justify-between items-center text-[8px] font-mono text-[#777] px-0.5">
+                            <span>個別: {fmScale}% × 全体: {globalUnitScale}%</span>
+                            <span className="text-[#00ffcc] font-bold">
+                              実効: {Math.round((fmScale * globalUnitScale) / 100)}%
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -2542,6 +3311,8 @@ export default function App() {
                           setFmRole(units[idx].role || "");
                           setFmDesc(units[idx].desc || "");
                           setFmDescJp(units[idx].descJp || "");
+                          setFmScale(getUnitScale(units[idx]));
+                          setFmOffsetY(getUnitOffsetY(units[idx]));
                         } else if (currentAdminTab === "LOGO") {
                           // if they click a logo in the logos tab, we can make it the system logo?
                         }
@@ -2614,26 +3385,58 @@ export default function App() {
                     SELECTED MEDIA<br/>PREVIEW
                   </div>
                   <div className="flex-1 relative flex items-center justify-center p-[10px] overflow-hidden">
-                    {!adminPreviewSrc && (
-                      <span className="text-[#333] font-['Orbitron'] text-[14px] tracking-widest font-bold">SELECT MEDIA TO PREVIEW</span>
-                    )}
-                    {adminPreviewSrc &&
-                      (adminPreviewSrc.endsWith(".mp4") ||
-                      adminPreviewSrc.endsWith(".webm") ? (
-                        <video
-                          src={adminPreviewSrc}
-                          controls
-                          autoPlay
-                          className="max-w-full max-h-full object-contain filter drop-shadow-[0_0_20px_rgba(255,255,255,0.05)]"
-                        />
-                      ) : (
-                        <div className="w-full h-full p-[20px] flex items-center justify-center">
+                    {(() => {
+                      const effectivePreviewSrc = adminPreviewSrc || (currentAdminTab === "CHAR" ? (units[adminSelectedCharIndex >= 0 ? adminSelectedCharIndex : 0]?.file || "") : "");
+                      if (!effectivePreviewSrc) {
+                        return (
+                          <span className="text-[#333] font-['Orbitron'] text-[14px] tracking-widest font-bold">SELECT MEDIA TO PREVIEW</span>
+                        );
+                      }
+                      if (effectivePreviewSrc.endsWith(".mp4") || effectivePreviewSrc.endsWith(".webm")) {
+                        return (
+                          <video
+                            src={effectivePreviewSrc}
+                            controls
+                            autoPlay
+                            className="max-w-full max-h-full object-contain filter drop-shadow-[0_0_20px_rgba(255,255,255,0.05)]"
+                          />
+                        );
+                      }
+                      return (
+                        <div className="relative w-full h-full p-[20px] flex items-center justify-center overflow-hidden">
+                          {currentAdminTab === "CHAR" && (
+                            <>
+                              <div className="absolute inset-4 border border-dashed border-[#222] pointer-events-none flex items-start justify-start p-1.5">
+                                <span className="text-[8px] font-mono text-[#444] tracking-widest">100% BASELINE FRAME</span>
+                              </div>
+                              <div className="absolute top-2 right-2 bg-[#0d0d0d]/90 border border-[#333] px-2.5 py-1 flex items-center gap-2 text-[9px] font-mono shadow-md z-10 pointer-events-none">
+                                <span className="text-[#888]">UNIT: <strong className="text-white">{units[adminSelectedCharIndex >= 0 ? adminSelectedCharIndex : 0]?.name || "SAMPLE"}</strong></span>
+                                <span className="text-[#444]">|</span>
+                                <span className="text-[#888]">INDIVIDUAL: <strong className="text-[#ccc]">{fmScale}%</strong></span>
+                                <span className="text-[#444]">×</span>
+                                <span className="text-[#888]">GLOBAL: <strong className="text-[var(--emerald-primary)]">{globalUnitScale}%</strong></span>
+                                <span className="text-[#444]">=</span>
+                                <span className="text-[#00ffcc] font-bold">NET: {Math.round((fmScale * globalUnitScale) / 100)}%</span>
+                                <span className="text-[#444]">|</span>
+                                <span className="text-[#888]">OFFSET Y: <strong className="text-white">{fmOffsetY}px</strong></span>
+                              </div>
+                            </>
+                          )}
                           <img
-                            src={adminPreviewSrc}
+                            src={effectivePreviewSrc}
+                            style={
+                              currentAdminTab === "CHAR"
+                                ? {
+                                    transform: `scale(${((fmScale / 100) * (globalUnitScale / 100))}) translateY(${fmOffsetY}px)`,
+                                    transition: "transform 0.15s ease-out",
+                                  }
+                                : undefined
+                            }
                             className="max-w-full max-h-full object-contain filter drop-shadow-[0_0_20px_rgba(255,255,255,0.05)]"
                           />
                         </div>
-                      ))}
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -2734,6 +3537,7 @@ export default function App() {
 
   const runBoot = () => {
     if (bootIntervalRef.current) clearInterval(bootIntervalRef.current);
+    setIsInitializingGlow(false);
     setCurrentScreen("boot");
     setBootProgress(0);
     setBootLogs([]);
@@ -2762,6 +3566,67 @@ export default function App() {
     }, 35);
   };
 
+  const [isInitializingGlow, setIsInitializingGlow] = useState(false);
+  const storyAutoTimerRef = useRef<NodeJS.Timeout[]>([]);
+
+  const clearStoryAutoTimers = () => {
+    storyAutoTimerRef.current.forEach((t) => clearTimeout(t));
+    storyAutoTimerRef.current = [];
+  };
+
+  // INITIALIZE INTERFACE 出現から約5秒後にローディング画面へ自動遷移＆直前のフワッとしたエメラルド発光演出
+  useEffect(() => {
+    if (currentScreen !== "story") {
+      clearStoryAutoTimers();
+      setIsInitializingGlow(false);
+      return;
+    }
+
+    const totalLines = currentLang === "JP" ? storyJp.length : storyEn.length;
+    const isFinished = storyLineIndex >= totalLines - 1 && totalLines > 0;
+
+    if (isFinished) {
+      clearStoryAutoTimers();
+      // 約4.2秒後にフワッとエメラルドグリーンに発光開始
+      const glowTimer = setTimeout(() => {
+        setIsInitializingGlow(true);
+      }, 4200);
+
+      // 約5.0秒（発光から800ms後）にローディング画面(boot)へ移動
+      const bootTimer = setTimeout(() => {
+        runBoot();
+      }, 5000);
+
+      storyAutoTimerRef.current = [glowTimer, bootTimer];
+    } else {
+      clearStoryAutoTimers();
+      setIsInitializingGlow(false);
+    }
+
+    return () => {
+      clearStoryAutoTimers();
+    };
+  }, [currentScreen, storyLineIndex, currentLang, storyJp.length, storyEn.length]);
+
+  const handleStoryButtonClick = () => {
+    const totalLines = currentLang === "JP" ? storyJp.length : storyEn.length;
+    const isFinished = storyLineIndex >= totalLines - 1;
+
+    if (isFinished) {
+      if (isInitializingGlow) return; // 既に発光中・遷移中
+      clearStoryAutoTimers();
+      setIsInitializingGlow(true);
+      // 手動クリック時もフワッとエメラルドグリーンに光ってから約600ms後にローディングへ
+      setTimeout(() => {
+        runBoot();
+      }, 600);
+    } else {
+      // SKIP PROLOGUE 押下時は待たずに即時実行
+      clearStoryAutoTimers();
+      runBoot();
+    }
+  };
+
   return (
     <div className="w-full h-full text-[#e0fcfb] font-['Share_Tech_Mono','Orbitron',monospace]">
       <div className="starfield"></div>
@@ -2778,12 +3643,53 @@ export default function App() {
             <h1 className="brand-primary text-[26px] mb-5">
               SPACE-ROBOTMAN WORLD
             </h1>
-            <div className="brand-secondary tracking-[0.8em] mb-[80px]">
+            <div
+              className="brand-secondary tracking-[0.8em]"
+              style={{ marginBottom: '18px' }}
+            >
               SECURE_BOOT_PROTOCOL_GS_V3
             </div>
+
             <div className="flex justify-center w-full">
-              <button className="mech-btn w-[200px]">
+              <button className="mech-btn w-[200px] h-[38px]">
                 <span>BOOT SYSTEM</span>
+              </button>
+            </div>
+
+            {/* Language Switcher under BOOT SYSTEM */}
+            <div
+              className="flex justify-center items-center gap-2.5 mt-5 cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                className={`mech-btn !w-[56px] !h-[24px] !mb-0 text-[11px] font-bold tracking-widest transition-all ${
+                  currentLang === "JP"
+                    ? "active !border-[var(--emerald-primary)] !text-[var(--emerald-primary)] !bg-[#002624] shadow-[0_0_12px_rgba(0,237,232,0.45)]"
+                    : "!text-[#777] !border-[#333] hover:!text-[#ccc] hover:!border-[#555]"
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentLang("JP");
+                }}
+                title="日本語"
+              >
+                <span>JP</span>
+              </button>
+              <button
+                type="button"
+                className={`mech-btn !w-[56px] !h-[24px] !mb-0 text-[11px] font-bold tracking-widest transition-all ${
+                  currentLang === "EN"
+                    ? "active !border-[var(--emerald-primary)] !text-[var(--emerald-primary)] !bg-[#002624] shadow-[0_0_12px_rgba(0,237,232,0.45)]"
+                    : "!text-[#777] !border-[#333] hover:!text-[#ccc] hover:!border-[#555]"
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentLang("EN");
+                }}
+                title="English"
+              >
+                <span>EN</span>
               </button>
             </div>
           </div>
@@ -2795,20 +3701,6 @@ export default function App() {
           id="story-screen"
           className="fixed inset-0 flex flex-col items-center justify-center transition-all duration-1000"
         >
-          <div className="lang-toggle absolute top-10 right-10 flex gap-[10px]">
-            <button
-              className={`mech-btn small ${currentLang === "JP" ? "active" : ""}`}
-              onClick={() => setCurrentLang("JP")}
-            >
-              <span>JP</span>
-            </button>
-            <button
-              className={`mech-btn small ${currentLang === "EN" ? "active" : ""}`}
-              onClick={() => setCurrentLang("EN")}
-            >
-              <span>EN</span>
-            </button>
-          </div>
           <div id="story-stage" className="w-[750px] text-center mb-[50px]">
             {(currentLang === "JP" ? storyJp : storyEn).map((line, i) => (
               <div
@@ -2820,10 +3712,30 @@ export default function App() {
             ))}
           </div>
           <div
-            className={`flex justify-center w-full transition-opacity duration-1000 mt-[40px] ${storyLineIndex >= (currentLang === "JP" ? storyJp.length : storyEn.length) - 1 ? "opacity-100" : "opacity-50"}`}
+            className={`flex justify-center w-full transition-opacity duration-1000 mt-[40px] ${
+              storyLineIndex >= (currentLang === "JP" ? storyJp.length : storyEn.length) - 1
+                ? "opacity-100"
+                : "opacity-50"
+            }`}
           >
-            <button className="mech-btn !w-[280px] pointer-events-auto h-[40px]" onClick={runBoot}>
-              <span className="text-[14px]">
+            <button
+              className={`mech-btn !w-[290px] pointer-events-auto h-[44px] relative overflow-hidden transition-all duration-700 ${
+                isInitializingGlow
+                  ? "!border-[var(--emerald-primary)] !bg-[#002624] shadow-[0_0_35px_rgba(0,237,232,0.75)] scale-[1.04]"
+                  : ""
+              }`}
+              onClick={handleStoryButtonClick}
+            >
+              {isInitializingGlow && (
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[rgba(0,237,232,0.3)] to-transparent animate-pulse pointer-events-none" />
+              )}
+              <span
+                className={`text-[14px] transition-all duration-700 ${
+                  isInitializingGlow
+                    ? "text-[var(--emerald-primary)] font-bold tracking-[2.5px] drop-shadow-[0_0_16px_rgba(0,237,232,1)]"
+                    : ""
+                }`}
+              >
                 {storyLineIndex >=
                 (currentLang === "JP" ? storyJp.length : storyEn.length) - 1
                   ? "INITIALIZE INTERFACE"
@@ -2909,8 +3821,8 @@ export default function App() {
             <div className="absolute bottom-[12px] left-[12px] w-[6px] h-[6px] rounded-full bg-[#111] border border-[#333] shadow-[inset_1px_1px_0_#555]"></div>
             <div className="absolute bottom-[12px] right-[12px] w-[6px] h-[6px] rounded-full bg-[#111] border border-[#333] shadow-[inset_1px_1px_0_#555]"></div>
 
-            <header className="chassis-header flex items-center justify-between px-5 bg-[#121212] border-b border-[#282828] relative">
-              <div className="flex items-center gap-3">
+            <header className="chassis-header flex items-center justify-between px-5 bg-[#121212] border-b border-[#282828] relative overflow-hidden">
+              <div className="flex items-center gap-3 anim-header-left">
                 <div className="flex items-center gap-2">
                   <div className="header-title">SPACE ROBOTMAN WORLD</div>
                 </div>
@@ -2919,7 +3831,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="header-status-line flex items-center gap-4">
+              <div className="header-status-line flex items-center gap-4 anim-header-right">
                 <div className="hidden md:flex items-center gap-2 text-[9px] font-mono text-[#555]">
                   <span>NODE: 01</span>
                   <span>//</span>
@@ -2938,7 +3850,7 @@ export default function App() {
               </div>
             </header>
 
-            <aside className="chassis-side bg-[#161616] border-r border-[#262626]">
+            <aside className="chassis-side bg-[#161616] border-r border-[#262626] anim-sidebar-enter">
               <div className="structural-panel"></div>
               <div className="button-area">
                 <div className="flex flex-col mt-[-5px]">
@@ -2990,14 +3902,28 @@ export default function App() {
                       <span className="nav-idx">05 //</span>
                       <span className="nav-label">OVERVIEW</span>
                     </button>
-                    <button
-                      className="mech-nav-btn hover:border-[#555] mt-1 text-[#aaa] hover:text-white"
-                      onClick={() => setCurrentScreen("splash")}
-                      title="オープニングトップ画面へ戻る"
-                    >
-                      <span className="nav-idx text-[#888]">◀ //</span>
-                      <span className="nav-label">OPENING TOP</span>
-                    </button>
+                    {/* OPENING TOP AUTO-RESET CONFIRMATION BUTTON (EMERALD GREEN) */}
+                    {openingTopCountdown === null ? (
+                      <button
+                        className="mech-nav-btn hover:border-[var(--emerald-dim)] hover:text-[var(--emerald-primary)] mt-1 text-[#aaa] transition-all group"
+                        onClick={handleOpeningTopClick}
+                        title="オープニングトップ画面へ戻る (クリックして確認)"
+                      >
+                        <span className="nav-idx text-[#888] group-hover:text-[var(--emerald-primary)]">◀ //</span>
+                        <span className="nav-label">OPENING TOP</span>
+                      </button>
+                    ) : (
+                      <button
+                        className="mech-nav-btn mt-1 !bg-[#002b28] !border-[var(--emerald-primary)] !text-[#00fff2] shadow-[0_0_14px_rgba(0,237,232,0.35)] transition-all animate-pulse cursor-pointer !justify-center !text-center whitespace-nowrap px-2"
+                        onClick={handleOpeningTopClick}
+                        title="もう一度クリックするとトップ画面へ戻ります（4秒放置で自動解除）"
+                      >
+                        <span className="font-['Orbitron'] font-bold text-[11px] tracking-widest text-[var(--emerald-primary)] flex items-center justify-center gap-1.5 w-full text-center">
+                          <span className="text-[10px]">◀</span>
+                          <span>RETURN NOW ?</span>
+                        </span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -3116,7 +4042,7 @@ export default function App() {
               </div>
             </aside>
 
-            <main className="content-main flex flex-col bg-[#111]">
+            <main className="content-main flex flex-col bg-[#111] anim-content-enter">
               <nav
                 className="sub-nav-row flex-none bg-[#111] border-b border-[#333] flex items-center gap-[10px] px-[20px]"
                 id="sub-nav-bar"

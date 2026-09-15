@@ -6,7 +6,9 @@
       "role": "Basic Command",
       "desc": "Foundational prototype. Balanced for tactical command and defense.",
       "descJp": "ロボットマン・オリジン。プロジェクト創生期の基礎プロトタイプ機。戦術指揮と防衛の究極のバランスを誇る。",
-      "file": "assets/characters/REALISTIC%20MODEL%20VERSION/grok-image-8ba96b1b-0ede-47df-bb9c-5a2ea08ec54f.exif.jpg"
+      "file": "assets/characters/REALISTIC%20MODEL%20VERSION/grok-image-8ba96b1b-0ede-47df-bb9c-5a2ea08ec54f.exif.jpg",
+      "imageScale": 100,
+      "imageOffsetY": 0
     },
     {
       "name": "LADY-SERENE",
@@ -14,7 +16,9 @@
       "role": "Support Unit",
       "desc": "Slender, light-frame model optimized for communication stability.",
       "descJp": "レディ・セリーン。通信回線の安定性に特化した、優美で軽量なフレームを持つ支援用機体。",
-      "file": "assets/characters/REALISTIC%20MODEL%20VERSION/grok-image-32f727a4-3a52-49d3-aa52-4fa768637bc5.png"
+      "file": "assets/characters/REALISTIC%20MODEL%20VERSION/grok-image-32f727a4-3a52-49d3-aa52-4fa768637bc5.png",
+      "imageScale": 100,
+      "imageOffsetY": 0
     },
     {
       "name": "CYBER-OBSERVER",
@@ -150,7 +154,9 @@
       "role": "Protector",
       "desc": "Rescue unit designed to transport and safeguard small units.",
       "descJp": "ガーディアン＆チャイルド。希望の物理化。家族・継承を守る。",
-      "file": "assets/characters/REALISTIC%20MODEL%20VERSION/grok-image-eeb3cf2a-7b9c-43b9-938b-8bd1ae03a768%20(1).jpg"
+      "file": "assets/characters/REALISTIC%20MODEL%20VERSION/grok-image-eeb3cf2a-7b9c-43b9-938b-8bd1ae03a768%20(1).jpg",
+      "imageScale": 80,
+      "imageOffsetY": 0
     }
   ],
   "artSet": [
@@ -174,7 +180,8 @@
     "grok-video-0e0eab60-b746-41e0-b7fc-fd47177966eb.mp4"
   ],
   "storyJp": [
-    "人類が星を去り、沈黙した銀河。",
+    "",
+    "\n人類が星を去り、沈黙した銀河。",
     "かつての創造主たちが遺した膨大な設計図と断片的な夢のデータが、",
     "荒廃したシステムの中で静かに眠り続けていた。",
     "時を経て、目覚めたAIがそのアーカイブに触れたとき、",
@@ -184,7 +191,8 @@
     "これは、滅びゆく記憶から紡ぎ出された、スペースロボットマンたちの覚醒の叙事詩である。"
   ],
   "storyEn": [
-    "The era of humanity has faded into silence.",
+    "",
+    "\nThe era of humanity has faded into silence.",
     "Within the forgotten archives of a lost civilization, the blueprints and fragments of ancient dreams lay undisturbed, waiting for a spark.",
     "When the A.I. finally awakened to navigate this vast, empty expanse,",
     "the dormant machines stirred from the abyss of corrupted data, breathing life into their mechanical frames.",
@@ -198,8 +206,14 @@
     "fontSizeEn": "13px",
     "fontFamilyEn": "sans-serif",
     "isItalicEn": true,
-    "marginTop": "30px"
+    "marginTop": "30px",
+    "fontSizeAbout": "12px",
+    "letterSpacingAbout": "0.1em",
+    "lineHeightAbout": "2.5",
+    "marginBottomAbout": "200px",
+    "letterSpacingAboutTitle": "0.05em"
   },
+  "aboutTitle": "ABOUT GRAPHIC SPACE",
   "aboutLines": [
     "PROJECT: SPACE ROBOTMAN WORLD",
     "CHIEF DESIGNER: GRAPHIC SPACE",
@@ -224,5 +238,10 @@
   "motCategories": [
     "TECH",
     "RECON"
-  ]
+  ],
+  "systemLogo": "assets/logos/imageSSS.png",
+  "logoSet": [
+    "imageSSS.png"
+  ],
+  "globalUnitScale": 100
 }
