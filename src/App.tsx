@@ -317,6 +317,17 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
+  // Synchronize browser/PWA header color (meta theme-color) to match application dark theme
+  useEffect(() => {
+    let meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute('name', 'theme-color');
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute('content', '#0a0d12');
+  }, []);
+
   const [activeCharFilter, setActiveCharFilter] = useState("ALL");
   const [selectedChar, setSelectedChar] = useState<any>(null);
 
