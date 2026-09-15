@@ -317,7 +317,7 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // Synchronize browser/PWA header color (meta theme-color) to match application dark theme
+  // Synchronize browser/PWA header color (meta theme-color) dynamically per screen
   useEffect(() => {
     let meta = document.querySelector('meta[name="theme-color"]');
     if (!meta) {
@@ -325,8 +325,10 @@ export default function App() {
       meta.setAttribute('name', 'theme-color');
       document.head.appendChild(meta);
     }
-    meta.setAttribute('content', '#000000');
-  }, []);
+    // #000000 for intro/boot/admin, #121212 for main dashboard
+    const targetColor = (currentScreen === "dash") ? "#121212" : "#000000";
+    meta.setAttribute('content', targetColor);
+  }, [currentScreen]);
 
   const [activeCharFilter, setActiveCharFilter] = useState("ALL");
   const [selectedChar, setSelectedChar] = useState<any>(null);
