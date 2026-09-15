@@ -325,7 +325,7 @@ export default function App() {
       meta.setAttribute('name', 'theme-color');
       document.head.appendChild(meta);
     }
-    meta.setAttribute('content', '#0a0d12');
+    meta.setAttribute('content', '#000000');
   }, []);
 
   const [activeCharFilter, setActiveCharFilter] = useState("ALL");
