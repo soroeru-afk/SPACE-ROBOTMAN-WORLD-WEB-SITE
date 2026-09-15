@@ -3,9 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { usePWAInstall } from "./usePWAInstall";
+import PWAInstallButton from "./components/PWAInstallButton";
+import OfflineIndicator from "./components/OfflineIndicator";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { ChevronLeft, ChevronRight, LayoutGrid, List, Monitor, Search, Shield, Zap, Cpu, Activity, Sparkles, ExternalLink, Maximize2, Minimize2, Download, Upload, FileJson, Check, AlertCircle, RefreshCw, Copy, Database, Lock, Key, Delete } from "lucide-react";
 import { loadInitialData, saveToLocalData, defaultAppData } from "./defaultData";
+import { loadAppDataFromIndexedDB, readFileAsDataURL } from "./idbStorage";
 import { OfflineIndicator } from "./components/OfflineIndicator";
 
 const TypewriterLine = ({ text }: { text: string }) => {
@@ -80,6 +84,30 @@ const defaultArtCats = ["CONCEPT", "ENVIRON"];
 const defaultMotCats = ["TECH", "RECON"];
 export const DEFAULT_SYSTEM_LOGO = "assets/logos/imageSSS.png";
 
+export const resolveArtSrc = (d: string) => {
+  if (!d) return "";
+  if (d.startsWith("data:") || d.startsWith("blob:") || d.startsWith("http://") || d.startsWith("https://") || d.startsWith("assets/") || d.startsWith("/")) {
+    return d;
+  }
+  return `assets/new_image/${d}`;
+};
+
+export const resolveMotSrc = (d: string) => {
+  if (!d) return "";
+  if (d.startsWith("data:") || d.startsWith("blob:") || d.startsWith("http://") || d.startsWith("https://") || d.startsWith("assets/") || d.startsWith("/")) {
+    return d;
+  }
+  return `assets/motion/${d}`;
+};
+
+export const resolveLogoSrc = (d: string) => {
+  if (!d) return "";
+  if (d.startsWith("data:") || d.startsWith("blob:") || d.startsWith("http://") || d.startsWith("https://") || d.startsWith("assets/") || d.startsWith("/")) {
+    return d;
+  }
+  return `assets/logos/${d}`;
+};
+
 const initialCachedData = loadInitialData();
 
 const mergeUnitScales = (loadedUnits: any[]): any[] => {
@@ -109,7 +137,23 @@ const mergeUnitScales = (loadedUnits: any[]): any[] => {
 };
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState("splash"); // splash, story, boot, dash, admin
+  const [currentScreen, setCurrentScreen] = useState("splash");
+
+  const { isInstallable, installPWA } = usePWAInstall();
+
+  // Synchronize browser/PWA header color (meta theme-color) dynamically per screen
+  useEffect(() => {
+    let meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute('name', 'theme-color');
+      document.head.appendChild(meta);
+    }
+    // #000000 for intro/boot/admin, #121212 for main dashboard
+    const targetColor = (currentScreen === "dash") ? "#121212" : "#000000";
+    meta.setAttribute('content', targetColor);
+  }, [currentScreen]);
+ // splash, story, boot, dash, admin
   const [currentLang, setCurrentLang] = useState("JP");
   const [currentNav, setCurrentNav] = useState("HOME");
   const [currentAdminTab, setCurrentAdminTab] = useState("ART");
@@ -174,16 +218,17 @@ export default function App() {
   const [artSet, setArtSet] = useState<string[]>(() => (initialCachedData.artSet && initialCachedData.artSet.length > 0) ? initialCachedData.artSet : defaultAppData.artSet);
   const [motSet, setMotSet] = useState<string[]>(() => (initialCachedData.motSet && initialCachedData.motSet.length > 0) ? initialCachedData.motSet : defaultAppData.motSet);
   const [logoSet, setLogoSet] = useState<string[]>(() => (initialCachedData.logoSet && initialCachedData.logoSet.length > 0) ? initialCachedData.logoSet : defaultAppData.logoSet);
+  const [isDraggingArt, setIsDraggingArt] = useState(false);
 
   const [currentVideoIndex, setCurrentVideoIndex] = useState(-1);
 
   const videoPlaylist = useMemo(() => {
     return [
-      ...artSet.filter(d => `assets/new_image/${d}` !== systemLogo).map((d) => `assets/new_image/${d}`),
-      ...motSet.map((d) => `assets/motion/${d}`),
+      ...artSet.filter(d => resolveArtSrc(d) !== systemLogo).map((d) => resolveArtSrc(d)),
+      ...motSet.map((d) => resolveMotSrc(d)),
       ...units.map((d) => d.file)
-    ].filter(src => (src && (typeof src === 'string') && (src.endsWith(".mp4") || src.endsWith(".webm"))) && !playlistExcludes.includes(src));
-  }, [artSet, motSet, units, playlistExcludes]);
+    ].filter(src => (src && (typeof src === 'string') && (src.endsWith(".mp4") || src.endsWith(".webm") || src.startsWith("data:video/"))) && !playlistExcludes.includes(src));
+  }, [artSet, motSet, units, playlistExcludes, systemLogo]);
 
   const handleVideoEnded = () => {
     if (splashMode === "SEQUENCE") {
@@ -257,6 +302,35 @@ export default function App() {
   }, [currentScreen]);
 
   useEffect(() => {
+    // 1. Asynchronously load high-capacity IndexedDB data (PWA / offline persistence)
+    loadAppDataFromIndexedDB().then((idbData) => {
+      if (idbData) {
+        if (Array.isArray(idbData.units) && idbData.units.length > 0) setUnits(mergeUnitScales(idbData.units));
+        if (Array.isArray(idbData.artSet) && idbData.artSet.length > 0) setArtSet(idbData.artSet);
+        if (Array.isArray(idbData.motSet) && idbData.motSet.length > 0) setMotSet(idbData.motSet);
+        if (Array.isArray(idbData.logoSet) && idbData.logoSet.length > 0) setLogoSet(idbData.logoSet);
+        if (idbData.storyJp) setStoryJp(idbData.storyJp);
+        if (idbData.storyEn) setStoryEn(idbData.storyEn);
+        if (idbData.storyStyle) setStoryStyle({ ...defaultStoryStyle, ...idbData.storyStyle });
+        if (idbData.aboutLines) setAboutLines(idbData.aboutLines);
+        if (idbData.aboutTitle) setAboutTitle(idbData.aboutTitle);
+        if (idbData.splashMedia) setSplashMedia(idbData.splashMedia);
+        if (idbData.splashMode) setSplashMode(idbData.splashMode);
+        if (idbData.splashOpacity !== undefined) setSplashOpacity(idbData.splashOpacity);
+        if (idbData.playlistExcludes) setPlaylistExcludes(idbData.playlistExcludes);
+        if (idbData.charCategories) setCharCategories(idbData.charCategories);
+        if (idbData.artCategories) setArtCategories(idbData.artCategories);
+        if (idbData.motCategories) setMotCategories(idbData.motCategories);
+        if (idbData.systemLogo && idbData.systemLogo.trim() !== "") {
+          setSystemLogo(idbData.systemLogo);
+        }
+        if (typeof idbData.globalUnitScale === "number" && !isNaN(idbData.globalUnitScale)) {
+          setGlobalUnitScale(idbData.globalUnitScale);
+        }
+      }
+    }).catch(() => {});
+
+    // 2. Fetch server data and perform hybrid merge (server assets + local additions)
     fetch("/api/data")
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
@@ -264,10 +338,50 @@ export default function App() {
       })
       .then((data) => {
         if (data) {
-          if (Array.isArray(data.units) && data.units.length > 0) setUnits(mergeUnitScales(data.units));
-          if (Array.isArray(data.artSet) && data.artSet.length > 0) setArtSet(data.artSet);
-          if (Array.isArray(data.motSet) && data.motSet.length > 0) setMotSet(data.motSet);
-          if (Array.isArray(data.logoSet) && data.logoSet.length > 0) setLogoSet(data.logoSet);
+          if (Array.isArray(data.artSet) && data.artSet.length > 0) {
+            setArtSet((prev) => {
+              const serverArt = data.artSet;
+              const localAdditions = prev.filter((a) => a.startsWith("data:") || a.startsWith("blob:"));
+              const merged = [...serverArt];
+              for (const a of localAdditions) {
+                if (!merged.includes(a)) merged.push(a);
+              }
+              return merged;
+            });
+          }
+          if (Array.isArray(data.units) && data.units.length > 0) {
+            setUnits((prev) => {
+              const serverUnits = data.units;
+              const localUnits = prev.filter((u) => u.file && (u.file.startsWith("data:") || u.file.startsWith("blob:")));
+              const merged = [...serverUnits];
+              for (const u of localUnits) {
+                if (!merged.some((m) => m.name === u.name || m.file === u.file)) merged.push(u);
+              }
+              return mergeUnitScales(merged);
+            });
+          }
+          if (Array.isArray(data.motSet) && data.motSet.length > 0) {
+            setMotSet((prev) => {
+              const serverMot = data.motSet;
+              const localMot = prev.filter((m) => m.startsWith("data:") || m.startsWith("blob:"));
+              const merged = [...serverMot];
+              for (const m of localMot) {
+                if (!merged.includes(m)) merged.push(m);
+              }
+              return merged;
+            });
+          }
+          if (Array.isArray(data.logoSet) && data.logoSet.length > 0) {
+            setLogoSet((prev) => {
+              const serverLogos = data.logoSet;
+              const localLogos = prev.filter((l) => l.startsWith("data:") || l.startsWith("blob:"));
+              const merged = [...serverLogos];
+              for (const l of localLogos) {
+                if (!merged.includes(l)) merged.push(l);
+              }
+              return merged;
+            });
+          }
           if (data.storyJp) setStoryJp(data.storyJp);
           if (data.storyEn) setStoryEn(data.storyEn);
           if (data.storyStyle) setStoryStyle({ ...defaultStoryStyle, ...data.storyStyle });
@@ -316,19 +430,6 @@ export default function App() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
-
-  // Synchronize browser/PWA header color (meta theme-color) dynamically per screen
-  useEffect(() => {
-    let meta = document.querySelector('meta[name="theme-color"]');
-    if (!meta) {
-      meta = document.createElement('meta');
-      meta.setAttribute('name', 'theme-color');
-      document.head.appendChild(meta);
-    }
-    // #000000 for intro/boot/admin, #121212 for main dashboard
-    const targetColor = (currentScreen === "dash") ? "#121212" : "#000000";
-    meta.setAttribute('content', targetColor);
-  }, [currentScreen]);
 
   const [activeCharFilter, setActiveCharFilter] = useState("ALL");
   const [selectedChar, setSelectedChar] = useState<any>(null);
@@ -486,9 +587,14 @@ export default function App() {
   const [artModalImage, setArtModalImage] = useState<string | null>(null);
 
   const getFilteredArt = () => {
-    let list = artSet.filter((d) => `assets/new_image/${d}` !== systemLogo);
+    let list = artSet.filter((d) => resolveArtSrc(d) !== systemLogo);
     if (activeArtFilter !== "ALL") {
-      list = list.filter((d) => d.toLowerCase().includes(activeArtFilter.toLowerCase()));
+      list = list.filter((d) => {
+        if (d.startsWith("data:") || d.startsWith("blob:")) {
+          return true; // Local additions remain visible in gallery
+        }
+        return d.toLowerCase().includes(activeArtFilter.toLowerCase());
+      });
     }
     return list;
   };
@@ -893,13 +999,42 @@ export default function App() {
         )}
 
         {currentNav === "ART" && (
-          <div id="art-well" className="w-full h-full flex flex-col relative overflow-hidden">
+          <div
+            id="art-well"
+            className="w-full h-full flex flex-col relative overflow-hidden"
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDraggingArt(true);
+            }}
+            onDragLeave={(e) => {
+              if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+              setIsDraggingArt(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDraggingArt(false);
+              if (e.dataTransfer.files?.length) {
+                handleUpload(e.dataTransfer.files, "ART");
+              }
+            }}
+          >
+            {isDraggingArt && (
+              <div className="absolute inset-0 z-50 bg-black/85 border-2 border-dashed border-[#00ffcc] flex flex-col items-center justify-center p-6 backdrop-blur-sm pointer-events-none transition-all">
+                <Upload size={44} className="text-[#00ffcc] mb-3 animate-bounce" />
+                <div className="font-['Orbitron'] text-white text-[15px] font-bold tracking-widest mb-1">
+                  DROP IMAGE TO ADD TO CG-ARTWORKS
+                </div>
+                <div className="text-[#aaa] text-[11px] font-mono">
+                  AUTO HYBRID STORAGE // SERVER & INDEXEDDB READY
+                </div>
+              </div>
+            )}
             {artViewMode === "SLIDE" ? (
               <>
                 <div className="hero-frame flex-1 bg-[#141414] m-4 border border-[#2e2e2e] shadow-sm overflow-hidden flex items-center justify-center p-4">
                   {selectedArt && (
                     <img
-                      src={`assets/new_image/${selectedArt}`}
+                      src={resolveArtSrc(selectedArt)}
                       alt="art"
                       className="max-w-full max-h-full object-contain drop-shadow-md"
                     />
@@ -914,7 +1049,8 @@ export default function App() {
                   </button>
                   <div 
                     ref={artScrollerRef}
-                    className="ribbon-scroller h-[120px] bg-[#141414] border-t border-[#2a2a2a] flex items-center gap-2 overflow-x-auto px-4 py-2 shrink-0 scroll-smooth"
+                    onWheel={(e) => handleScrollerWheel('ART', e)}
+                    className="ribbon-scroller h-[120px] bg-[#141414] border-t border-[#2a2a2a] flex items-center gap-2 overflow-x-auto px-4 py-2 shrink-0 scroll-smooth cursor-grab active:cursor-grabbing"
                   >
                     {getFilteredArt().map((art) => (
                       <div
@@ -923,7 +1059,7 @@ export default function App() {
                         onClick={() => setSelectedArt(art)}
                       >
                         <img
-                          src={`assets/new_image/${art}`}
+                          src={resolveArtSrc(art)}
                           alt="thumb"
                           className="h-full w-auto object-cover"
                         />
@@ -980,7 +1116,7 @@ export default function App() {
                       >
                         <div className="relative w-full aspect-[16/10] bg-[#080808] overflow-hidden flex items-center justify-center">
                           <img
-                            src={`assets/new_image/${art}`}
+                            src={resolveArtSrc(art)}
                             alt={art}
                             className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
                             loading="lazy"
@@ -993,7 +1129,7 @@ export default function App() {
                         </div>
                         <div className="px-2.5 py-1.5 bg-[#121212] border-t border-[#222] flex items-center justify-between text-[9px] font-mono">
                           <span className="text-[#888] tracking-wider truncate max-w-[75%]">
-                            {art.replace(/\.[^/.]+$/, "")}
+                            {art.startsWith("data:") ? `LOCAL ART #${String(idx + 1).padStart(2, "0")}` : art.replace(/\.[^/.]+$/, "")}
                           </span>
                           <span className="text-[#555] tracking-widest shrink-0">
                             #{String(idx + 1).padStart(2, "0")}
@@ -1019,7 +1155,7 @@ export default function App() {
                   <div className="flex items-center justify-between px-5 py-3 border-b border-[#252525] bg-[#161616]">
                     <div className="flex items-center gap-3">
                       <span className="text-[12px] font-mono font-bold text-white tracking-widest">
-                        {artModalImage}
+                        {artModalImage.startsWith("data:") ? "LOCAL STORED ART" : artModalImage}
                       </span>
                       <span className="text-[10px] font-mono text-[#666]">
                         // INSPECTION VIEW
@@ -1047,7 +1183,7 @@ export default function App() {
 
                   <div className="flex-1 relative flex items-center justify-center p-4 bg-[#0a0a0a] overflow-hidden">
                     <img
-                      src={`assets/new_image/${artModalImage}`}
+                      src={resolveArtSrc(artModalImage)}
                       alt={artModalImage}
                       className="max-w-full max-h-full object-contain drop-shadow-2xl"
                     />
@@ -1097,7 +1233,7 @@ export default function App() {
                   autoPlay
                   muted
                   loop
-                  src={`assets/motion/${selectedMot}`}
+                  src={resolveMotSrc(selectedMot)}
                   className="max-w-full max-h-full object-contain drop-shadow-md"
                 />
               )}
@@ -1111,7 +1247,8 @@ export default function App() {
               </button>
               <div 
                 ref={motScrollerRef}
-                className="ribbon-scroller h-[120px] bg-[#141414] border-t border-[#2a2a2a] flex items-center gap-2 overflow-x-auto px-4 py-2 shrink-0 scroll-smooth"
+                onWheel={(e) => handleScrollerWheel('MOT', e)}
+                className="ribbon-scroller h-[120px] bg-[#141414] border-t border-[#2a2a2a] flex items-center gap-2 overflow-x-auto px-4 py-2 shrink-0 scroll-smooth cursor-grab active:cursor-grabbing"
               >
                 {motSet.map((mot) => (
                   <div
@@ -1120,7 +1257,7 @@ export default function App() {
                     onClick={() => setSelectedMot(mot)}
                   >
                     <video
-                      src={`assets/motion/${mot}`}
+                      src={resolveMotSrc(mot)}
                       muted
                       className="h-full w-auto object-cover"
                     />
@@ -1823,37 +1960,64 @@ export default function App() {
   const artScrollerRef = useRef<HTMLDivElement>(null);
   const motScrollerRef = useRef<HTMLDivElement>(null);
 
+  const wheelAccumulatorRef = useRef<{ ART: number; MOT: number }>({ ART: 0, MOT: 0 });
+  const lastWheelTimeRef = useRef<number>(0);
+
   const navigateMedia = (type: 'ART' | 'MOT', direction: 'left' | 'right') => {
     if (type === 'ART') {
-      const idx = artSet.indexOf(selectedArt);
-      if (idx === -1 && artSet.length > 0) {
-          setSelectedArt(artSet[0]);
-          return;
+      const list = getFilteredArt();
+      if (list.length === 0) return;
+      const idx = list.indexOf(selectedArt);
+      let nextIdx = 0;
+      if (idx === -1) {
+        nextIdx = 0;
+      } else {
+        nextIdx = direction === 'left' ? idx - 1 : idx + 1;
+        if (nextIdx < 0) nextIdx = list.length - 1;
+        if (nextIdx >= list.length) nextIdx = 0;
       }
-      if (idx === -1) return;
-      let nextIdx = direction === 'left' ? idx - 1 : idx + 1;
-      if (nextIdx < 0) nextIdx = artSet.length - 1;
-      if (nextIdx >= artSet.length) nextIdx = 0;
-      setSelectedArt(artSet[nextIdx]);
+      setSelectedArt(list[nextIdx]);
       if (artScrollerRef.current) {
         const thumb = artScrollerRef.current.children[nextIdx] as HTMLElement;
         if (thumb) thumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
     } else {
+      if (motSet.length === 0) return;
       const idx = motSet.indexOf(selectedMot);
-      if (idx === -1 && motSet.length > 0) {
-          setSelectedMot(motSet[0]);
-          return;
+      let nextIdx = 0;
+      if (idx === -1) {
+        nextIdx = 0;
+      } else {
+        nextIdx = direction === 'left' ? idx - 1 : idx + 1;
+        if (nextIdx < 0) nextIdx = motSet.length - 1;
+        if (nextIdx >= motSet.length) nextIdx = 0;
       }
-      if (idx === -1) return;
-      let nextIdx = direction === 'left' ? idx - 1 : idx + 1;
-      if (nextIdx < 0) nextIdx = motSet.length - 1;
-      if (nextIdx >= motSet.length) nextIdx = 0;
       setSelectedMot(motSet[nextIdx]);
       if (motScrollerRef.current) {
         const thumb = motScrollerRef.current.children[nextIdx] as HTMLElement;
         if (thumb) thumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
+    }
+  };
+
+  const handleScrollerWheel = (type: 'ART' | 'MOT', e: React.WheelEvent<HTMLDivElement>) => {
+    const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    if (Math.abs(delta) < 2) return;
+
+    const now = Date.now();
+    if (now - lastWheelTimeRef.current > 300) {
+      wheelAccumulatorRef.current[type] = 0;
+    }
+    lastWheelTimeRef.current = now;
+    wheelAccumulatorRef.current[type] += delta;
+
+    const THRESHOLD = 25;
+    if (wheelAccumulatorRef.current[type] >= THRESHOLD) {
+      navigateMedia(type, 'right');
+      wheelAccumulatorRef.current[type] = 0;
+    } else if (wheelAccumulatorRef.current[type] <= -THRESHOLD) {
+      navigateMedia(type, 'left');
+      wheelAccumulatorRef.current[type] = 0;
     }
   };
 
@@ -2179,9 +2343,10 @@ export default function App() {
     }
   };
 
-  const handleUpload = async (files: FileList | File[]) => {
+  const handleUpload = async (files: FileList | File[], categoryOverride?: string) => {
+    const category = categoryOverride || currentAdminTab;
     let formData = new FormData();
-    formData.append("category", currentAdminTab);
+    formData.append("category", category);
     if (files.length === 1 && customUploadName) {
       formData.append("filename", customUploadName);
     }
@@ -2190,61 +2355,125 @@ export default function App() {
     }
 
     setUploadMsg(`UPLOADING ${files.length} FILE(S)...`);
+    let isServerUploaded = false;
+
+    // 1. サーバーへのアップロードを試行（AI Studio / Node.js 稼働時）
     try {
       const res = await fetch("/api/upload", {
         method: "POST",
         body: formData,
       });
-      const data = await res.json();
-      if (data.success) {
-        setUploadMsg("UPLOAD COMPLETE!");
-        setCustomUploadName("");
-        let p: any = { units, artSet, motSet, logoSet };
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          isServerUploaded = true;
+          setUploadMsg("UPLOAD COMPLETE (SERVER)");
+          setCustomUploadName("");
+          let p: any = { units, artSet, motSet, logoSet };
 
+          let newArtSet = [...artSet];
+          let newMotSet = [...motSet];
+          let newLogoSet = [...logoSet];
+          let newUnits = [...units];
+
+          for (const fileData of data.files) {
+            if (category === "ART") {
+              newArtSet.push(fileData.basename);
+            } else if (category === "LOGO") {
+              newLogoSet.push(fileData.basename);
+            } else if (category === "MOTION") {
+              newMotSet.push(fileData.basename);
+            } else if (category === "CHAR") {
+              newUnits.push({
+                name: fmName || "UNKNOWN",
+                faction: fmFact || "UNKNOWN",
+                role: fmRole || "UNKNOWN",
+                desc: fmDesc || "",
+                descJp: fmDescJp || "",
+                file: fileData.filename,
+              });
+            }
+          }
+
+          if (category === "ART") {
+            setArtSet(newArtSet);
+            setSelectedArt(newArtSet[newArtSet.length - 1]);
+            p.artSet = newArtSet;
+          } else if (category === "LOGO") {
+            setLogoSet(newLogoSet);
+            p.logoSet = newLogoSet;
+          } else if (category === "MOTION") {
+            setMotSet(newMotSet);
+            p.motSet = newMotSet;
+          } else if (category === "CHAR") {
+            setUnits(newUnits);
+            p.units = newUnits;
+          }
+
+          saveAdminData(p);
+        }
+      }
+    } catch (e) {
+      // サーバーが不在（PWA・ローカル静的環境）
+      isServerUploaded = false;
+    }
+
+    // 2. サーバーが動いていない場合（PWA端末内 / オフライン）は自動で大容量ストレージ (IndexedDB & Local) へ保存
+    if (!isServerUploaded) {
+      try {
+        setUploadMsg(`SAVING ${files.length} FILE(S) TO LOCAL STORAGE...`);
+
+        let p: any = { units, artSet, motSet, logoSet };
         let newArtSet = [...artSet];
-        let newMotSet = [...motSet];
         let newLogoSet = [...logoSet];
+        let newMotSet = [...motSet];
         let newUnits = [...units];
 
-        for (const fileData of data.files) {
-          if (currentAdminTab === "ART") {
-            newArtSet.push(fileData.basename);
-          } else if (currentAdminTab === "LOGO") {
-            newLogoSet.push(fileData.basename);
-          } else if (currentAdminTab === "MOTION") {
-            newMotSet.push(fileData.basename);
-          } else if (currentAdminTab === "CHAR") {
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          const dataUrl = await readFileAsDataURL(file);
+          const customName = (files.length === 1 && customUploadName) ? customUploadName : file.name;
+
+          if (category === "ART") {
+            newArtSet.push(dataUrl);
+          } else if (category === "LOGO") {
+            newLogoSet.push(dataUrl);
+          } else if (category === "MOTION") {
+            newMotSet.push(dataUrl);
+          } else if (category === "CHAR") {
             newUnits.push({
-              name: fmName || "UNKNOWN",
+              name: fmName || customName.replace(/\.[^/.]+$/, "") || "UNKNOWN",
               faction: fmFact || "UNKNOWN",
               role: fmRole || "UNKNOWN",
               desc: fmDesc || "",
               descJp: fmDescJp || "",
-              file: fileData.filename,
+              file: dataUrl,
             });
           }
         }
 
-        if (currentAdminTab === "ART") {
+        if (category === "ART") {
           setArtSet(newArtSet);
+          setSelectedArt(newArtSet[newArtSet.length - 1]);
           p.artSet = newArtSet;
-        } else if (currentAdminTab === "LOGO") {
+        } else if (category === "LOGO") {
           setLogoSet(newLogoSet);
           p.logoSet = newLogoSet;
-        } else if (currentAdminTab === "MOTION") {
+        } else if (category === "MOTION") {
           setMotSet(newMotSet);
           p.motSet = newMotSet;
-        } else if (currentAdminTab === "CHAR") {
+        } else if (category === "CHAR") {
           setUnits(newUnits);
           p.units = newUnits;
         }
 
         saveAdminData(p);
-      } else {
-        setUploadMsg("ERROR: " + data.error);
+        setUploadMsg("UPLOAD COMPLETE (SAVED TO LOCAL STORAGE)");
+        setCustomUploadName("");
+      } catch (localErr) {
+        console.error("Local save error:", localErr);
+        setUploadMsg("ERROR: FAILED TO SAVE LOCAL FILE");
       }
-    } catch (e) {
-      setUploadMsg("ERROR: PLEASE RUN LOCAL SERVER");
     }
   };
 
@@ -2256,7 +2485,7 @@ export default function App() {
       setArtSet(arr);
       p.artSet = arr;
     } else if (currentAdminTab === "LOGO") {
-      const deletedLogoSrc = `assets/logos/${logoSet[index]}`;
+      const deletedLogoSrc = resolveLogoSrc(logoSet[index]);
       const arr = [...logoSet];
       arr.splice(index, 1);
       setLogoSet(arr);
@@ -2278,6 +2507,59 @@ export default function App() {
     }
     saveAdminData(p);
     setAdminPreviewSrc("");
+  };
+
+  const [draggedAdminIndex, setDraggedAdminIndex] = useState<number | null>(null);
+  const [dragOverAdminIndex, setDragOverAdminIndex] = useState<number | null>(null);
+
+  const moveAdminItem = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || fromIndex < 0) return;
+    let p: any = { units, artSet, motSet, logoSet };
+
+    if (currentAdminTab === "ART") {
+      if (fromIndex >= artSet.length || toIndex >= artSet.length || toIndex < 0) return;
+      const arr = [...artSet];
+      const [moved] = arr.splice(fromIndex, 1);
+      arr.splice(toIndex, 0, moved);
+      setArtSet(arr);
+      p.artSet = arr;
+      saveAdminData(p);
+      setUploadMsg(`CG ART REORDERED: #${fromIndex + 1} ➔ #${toIndex + 1}`);
+    } else if (currentAdminTab === "CHAR") {
+      if (fromIndex >= units.length || toIndex >= units.length || toIndex < 0) return;
+      const arr = [...units];
+      const [moved] = arr.splice(fromIndex, 1);
+      arr.splice(toIndex, 0, moved);
+      setUnits(arr);
+      if (adminSelectedCharIndex === fromIndex) {
+        setAdminSelectedCharIndex(toIndex);
+      } else if (adminSelectedCharIndex > fromIndex && adminSelectedCharIndex <= toIndex) {
+        setAdminSelectedCharIndex(adminSelectedCharIndex - 1);
+      } else if (adminSelectedCharIndex < fromIndex && adminSelectedCharIndex >= toIndex) {
+        setAdminSelectedCharIndex(adminSelectedCharIndex + 1);
+      }
+      p.units = arr;
+      saveAdminData(p);
+      setUploadMsg(`CHARACTER REORDERED: #${fromIndex + 1} ➔ #${toIndex + 1}`);
+    } else if (currentAdminTab === "MOTION") {
+      if (fromIndex >= motSet.length || toIndex >= motSet.length || toIndex < 0) return;
+      const arr = [...motSet];
+      const [moved] = arr.splice(fromIndex, 1);
+      arr.splice(toIndex, 0, moved);
+      setMotSet(arr);
+      p.motSet = arr;
+      saveAdminData(p);
+      setUploadMsg(`MOVIE REORDERED: #${fromIndex + 1} ➔ #${toIndex + 1}`);
+    } else if (currentAdminTab === "LOGO") {
+      if (fromIndex >= logoSet.length || toIndex >= logoSet.length || toIndex < 0) return;
+      const arr = [...logoSet];
+      const [moved] = arr.splice(fromIndex, 1);
+      arr.splice(toIndex, 0, moved);
+      setLogoSet(arr);
+      p.logoSet = arr;
+      saveAdminData(p);
+      setUploadMsg(`LOGO REORDERED: #${fromIndex + 1} ➔ #${toIndex + 1}`);
+    }
   };
 
   const updateSelectedCharMetadata = () => {
@@ -2326,28 +2608,28 @@ export default function App() {
     let thumbsData: any[] = [];
     if (currentAdminTab === "ART")
       thumbsData = artSet.map((d, i) => ({
-        f: d,
-        src: `assets/new_image/${d}`,
+        f: d.startsWith("data:") ? `LOCAL_ART_${i + 1}` : d,
+        src: resolveArtSrc(d),
         i,
       }));
     else if (currentAdminTab === "LOGO")
       thumbsData = logoSet.map((d, i) => ({
-        f: d,
-        src: `assets/logos/${d}`,
+        f: d.startsWith("data:") ? `LOCAL_LOGO_${i + 1}` : d,
+        src: resolveLogoSrc(d),
         i,
       }));
     else if (currentAdminTab === "MOTION")
       thumbsData = motSet.map((d, i) => ({
-        f: d,
-        src: `assets/motion/${d}`,
+        f: d.startsWith("data:") ? `LOCAL_MOTION_${i + 1}` : d,
+        src: resolveMotSrc(d),
         i,
       }));
     else if (currentAdminTab === "CHAR")
       thumbsData = units.map((d, i) => ({ f: d.name, src: d.file, i }));
     else if (currentAdminTab === "HOME_MEDIA") {
       thumbsData = [
-        ...artSet.map((d) => ({ f: d, src: `assets/new_image/${d}` })),
-        ...motSet.map((d) => ({ f: d, src: `assets/motion/${d}` })),
+        ...artSet.map((d, i) => ({ f: d.startsWith("data:") ? `LOCAL_ART_${i + 1}` : d, src: resolveArtSrc(d) })),
+        ...motSet.map((d, i) => ({ f: d.startsWith("data:") ? `LOCAL_MOTION_${i + 1}` : d, src: resolveMotSrc(d) })),
         ...units.map((d) => ({ f: d.name, src: d.file })),
       ];
     }
@@ -3309,12 +3591,64 @@ export default function App() {
 
               {/* RIGHT MAIN PANEL */}
               <div className="flex-1 flex flex-col min-w-0 h-full">
+                {/* GALLERY REORDER BAR */}
+                <div className="flex items-center justify-between px-3 py-2 bg-[#121212] border-b border-[#2a2a2a] text-[10px] font-mono shrink-0 select-none">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[#888] font-['Orbitron'] font-bold tracking-wider">
+                      SEQUENCE REORDER:
+                    </span>
+                    <span className="text-[#00ffcc] font-bold">
+                      {thumbsData.length} ITEMS
+                    </span>
+                    <span className="text-[#444] hidden sm:inline">//</span>
+                    <span className="text-[#888] text-[9px] hidden sm:inline">
+                      ドラッグ＆ドロップ または [◀][▶] で並べ替え
+                    </span>
+                  </div>
+                  <div className="text-[9px] text-[#00ffcc] font-mono tracking-widest hidden md:block">
+                    AUTO PERSISTED
+                  </div>
+                </div>
+
                 {/* GALLERY TOP AREA */}
-                <div className="h-[200px] shrink-0 overflow-y-auto content-start flex flex-wrap gap-[15px] p-[10px]">
+                <div className="min-h-[210px] max-h-[270px] shrink-0 overflow-y-auto content-start flex flex-wrap gap-[12px] p-[10px] bg-[#0a0a0a]">
                   {thumbsData.map((item, idx) => (
                     <div
                       key={idx}
-                      className="w-[120px] bg-[#1a1a1a] border border-[#333] hover:border-[#666] relative cursor-pointer group transition-colors flex flex-col"
+                      draggable={currentAdminTab !== "HOME_MEDIA"}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("text/plain", String(idx));
+                        setDraggedAdminIndex(idx);
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                      }}
+                      onDragEnter={() => setDragOverAdminIndex(idx)}
+                      onDragLeave={() => {
+                        if (dragOverAdminIndex === idx) setDragOverAdminIndex(null);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const fromStr = e.dataTransfer.getData("text/plain");
+                        const from = Number(fromStr);
+                        if (!isNaN(from) && from !== idx) {
+                          moveAdminItem(from, idx);
+                        }
+                        setDraggedAdminIndex(null);
+                        setDragOverAdminIndex(null);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedAdminIndex(null);
+                        setDragOverAdminIndex(null);
+                      }}
+                      className={`w-[124px] bg-[#161616] border relative cursor-pointer group transition-all flex flex-col select-none ${
+                        draggedAdminIndex === idx
+                          ? "opacity-40 border-[#00ffcc] scale-95"
+                          : dragOverAdminIndex === idx
+                          ? "border-[#00ffcc] bg-[#112420] shadow-[0_0_12px_rgba(0,255,204,0.4)] scale-105 z-20"
+                          : "border-[#2e2e2e] hover:border-[#666]"
+                      }`}
                       onClick={() => {
                         setAdminPreviewSrc(item.src);
                         if (currentAdminTab === "CHAR") {
@@ -3327,11 +3661,11 @@ export default function App() {
                           setFmScale(getUnitScale(units[idx]));
                           setFmOffsetY(getUnitOffsetY(units[idx]));
                         } else if (currentAdminTab === "LOGO") {
-                          // if they click a logo in the logos tab, we can make it the system logo?
+                          // logo selection handled below
                         }
                       }}
                     >
-                      <div className="w-full h-[90px] bg-[#000] relative">
+                      <div className="w-full h-[84px] bg-[#000] relative overflow-hidden">
                         {item.src.endsWith(".mp4") || item.src.endsWith(".webm") ? (
                           <video
                             src={item.src}
@@ -3346,27 +3680,60 @@ export default function App() {
                             }}
                           />
                         )}
-                        <div className="absolute top-[-8px] right-[-8px] flex opacity-0 group-hover:opacity-100 transition-opacity z-10">
+
+                        {/* Order Sequence Badge */}
+                        <div className="absolute top-1 left-1 bg-black/85 border border-[#3a3a3a] px-1 py-0.2 text-[8px] font-mono text-[#00ffcc] font-bold tracking-wider z-10">
+                          #{String(idx + 1).padStart(2, "0")}
+                        </div>
+
+                        {/* Delete Button */}
+                        <div className="absolute top-1 right-1 flex opacity-0 group-hover:opacity-100 transition-opacity z-10">
                           <button
-                            className="text-[10px] font-bold bg-[#b00] hover:bg-[#f00] text-white border border-[#400] rounded-full cursor-pointer w-[24px] h-[24px] flex items-center justify-center shadow-md"
+                            className="text-[9px] font-bold bg-[#b00]/90 hover:bg-[#f00] text-white border border-[#400] rounded-full cursor-pointer w-[20px] h-[20px] flex items-center justify-center shadow-md"
                             onClick={(e) => {
                               e.stopPropagation();
                               deleteAdminItem(idx);
                             }}
                             title="Delete"
                           >
-                            X
+                            ✕
                           </button>
                         </div>
                       </div>
-                      <div className="bg-[#1a1a1a] text-[#aaa] text-[9px] p-[6px] font-bold tracking-widest text-center uppercase border-t border-[#333] truncate">
+
+                      {/* Item label */}
+                      <div className="bg-[#121212] text-[#aaa] text-[9px] px-[6px] py-[3px] font-bold tracking-widest text-center uppercase border-t border-[#262626] truncate" title={item.f}>
                         {item.f}
                       </div>
 
+                      {/* Reorder Buttons (Move left / right) */}
+                      {currentAdminTab !== "HOME_MEDIA" && (
+                        <div className="grid grid-cols-2 gap-1 p-[3px] bg-[#0d0d0d] border-t border-[#222]" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={() => moveAdminItem(idx, idx - 1)}
+                            className="text-[9px] py-0.5 bg-[#1a1a1a] hover:bg-[#2e2e2e] disabled:opacity-20 disabled:hover:bg-[#1a1a1a] text-[#ccc] hover:text-white border border-[#333] flex items-center justify-center font-mono font-bold transition-colors cursor-pointer disabled:cursor-not-allowed"
+                            title="前へ移動 (◀)"
+                          >
+                            ◀
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === thumbsData.length - 1}
+                            onClick={() => moveAdminItem(idx, idx + 1)}
+                            className="text-[9px] py-0.5 bg-[#1a1a1a] hover:bg-[#2e2e2e] disabled:opacity-20 disabled:hover:bg-[#1a1a1a] text-[#ccc] hover:text-white border border-[#333] flex items-center justify-center font-mono font-bold transition-colors cursor-pointer disabled:cursor-not-allowed"
+                            title="次へ移動 (▶)"
+                          >
+                            ▶
+                          </button>
+                        </div>
+                      )}
+
                       {currentAdminTab === "LOGO" && (
-                         <div className="p-[5px] border-t border-[#333]">
+                         <div className="p-[4px] border-t border-[#2e2e2e]">
                            <button 
-                             className={`w-full text-[9px] border py-[4px] font-bold uppercase transition-colors ${
+                             className={`w-full text-[8px] border py-[3px] font-bold uppercase transition-colors ${
                                systemLogo === item.src
                                  ? "bg-[#252525] text-white border-[#888]"
                                  : "bg-[#181818] hover:bg-[#252525] text-[#ccc] hover:text-white border-[#444] hover:border-[#777]"
@@ -3386,7 +3753,7 @@ export default function App() {
                   ))}
                   
                   {thumbsData.length === 0 && (
-                     <div className="w-full h-full flex items-center justify-center text-[#555] font-['Orbitron'] tracking-widest">
+                     <div className="w-full h-full min-h-[140px] flex items-center justify-center text-[#555] font-['Orbitron'] tracking-widest">
                        NO MEDIA FOUND
                      </div>
                   )}

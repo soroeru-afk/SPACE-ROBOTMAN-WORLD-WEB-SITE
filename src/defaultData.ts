@@ -291,6 +291,8 @@ export const defaultAppData: AppData = {
   ]
 };
 
+import { saveAppDataToIndexedDB } from "./idbStorage";
+
 const STORAGE_KEY = "space_robotman_app_data_v1";
 
 export function loadInitialData(): AppData {
@@ -323,12 +325,30 @@ export function loadInitialData(): AppData {
 
 export function saveToLocalData(data: Partial<AppData>) {
   if (typeof window !== "undefined") {
+    const existing = loadInitialData();
+    const merged = { ...existing, ...data };
+
+    // 1. High-capacity IndexedDB persistence (never hits 5MB limit)
+    saveAppDataToIndexedDB(merged).catch((err) => {
+      console.warn("IndexedDB persistence warning:", err);
+    });
+
+    // 2. Synchronous localStorage cache for instant fast boot
     try {
-      const existing = loadInitialData();
-      const merged = { ...existing, ...data };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-    } catch (e) {
-      console.warn("Could not write to localStorage:", e);
+    } catch (e: any) {
+      // If DataURLs exceed 5MB quota, save lightweight metadata to localStorage
+      console.warn("localStorage quota exceeded, preserved in IndexedDB:", e?.message);
+      try {
+        const lightweight = {
+          ...merged,
+          // If needed, keep non-dataURL references in localStorage
+          artSet: merged.artSet?.map(a => a.startsWith("data:") ? "[LOCAL_IDB_MEDIA]" : a),
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(lightweight));
+      } catch (nestedErr) {
+        // Ignored as IndexedDB holds the authoritative data
+      }
     }
   }
 }
