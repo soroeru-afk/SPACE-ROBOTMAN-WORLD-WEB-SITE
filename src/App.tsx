@@ -171,6 +171,8 @@ export default function App() {
   const [charCategories, setCharCategories] = useState<string[]>(() => initialCachedData.charCategories || defaultCharCats);
   const [artCategories, setArtCategories] = useState<string[]>(() => initialCachedData.artCategories || defaultArtCats);
   const [motCategories, setMotCategories] = useState<string[]>(() => initialCachedData.motCategories || defaultMotCats);
+  const [artCategoryMap, setArtCategoryMap] = useState<Record<string, string>>(() => initialCachedData.artCategoryMap || defaultAppData.artCategoryMap || {});
+  const [motCategoryMap, setMotCategoryMap] = useState<Record<string, string>>(() => initialCachedData.motCategoryMap || defaultAppData.motCategoryMap || {});
   const [systemLogo, setSystemLogo] = useState<string>(() => initialCachedData.systemLogo || DEFAULT_SYSTEM_LOGO);
 
   // Global unit scale state (defaults to cached/default, allows admin global scaling)
@@ -321,6 +323,8 @@ export default function App() {
         if (idbData.charCategories) setCharCategories(idbData.charCategories);
         if (idbData.artCategories) setArtCategories(idbData.artCategories);
         if (idbData.motCategories) setMotCategories(idbData.motCategories);
+        if (idbData.artCategoryMap) setArtCategoryMap(idbData.artCategoryMap);
+        if (idbData.motCategoryMap) setMotCategoryMap(idbData.motCategoryMap);
         if (idbData.systemLogo && idbData.systemLogo.trim() !== "") {
           setSystemLogo(idbData.systemLogo);
         }
@@ -394,6 +398,8 @@ export default function App() {
           if (data.charCategories) setCharCategories(data.charCategories);
           if (data.artCategories) setArtCategories(data.artCategories);
           if (data.motCategories) setMotCategories(data.motCategories);
+          if (data.artCategoryMap) setArtCategoryMap(data.artCategoryMap);
+          if (data.motCategoryMap) setMotCategoryMap(data.motCategoryMap);
           if (data.systemLogo && data.systemLogo.trim() !== "") {
             setSystemLogo(data.systemLogo);
           }
@@ -590,10 +596,8 @@ export default function App() {
     let list = artSet.filter((d) => resolveArtSrc(d) !== systemLogo);
     if (activeArtFilter !== "ALL") {
       list = list.filter((d) => {
-        if (d.startsWith("data:") || d.startsWith("blob:")) {
-          return true; // Local additions remain visible in gallery
-        }
-        return d.toLowerCase().includes(activeArtFilter.toLowerCase());
+        const cat = artCategoryMap[d] || defaultAppData.artCategoryMap?.[d] || (d.toLowerCase().includes(activeArtFilter.toLowerCase()) ? activeArtFilter : "CONCEPT");
+        return cat.toUpperCase() === activeArtFilter.toUpperCase();
       });
     }
     return list;
@@ -601,6 +605,17 @@ export default function App() {
 
   const [activeMotFilter, setActiveMotFilter] = useState("ALL");
   const [selectedMot, setSelectedMot] = useState<string | null>(null);
+
+  const getFilteredMot = () => {
+    let list = [...motSet];
+    if (activeMotFilter !== "ALL") {
+      list = list.filter((d) => {
+        const cat = motCategoryMap[d] || defaultAppData.motCategoryMap?.[d] || (d.toLowerCase().includes(activeMotFilter.toLowerCase()) ? activeMotFilter : "TECH");
+        return cat.toUpperCase() === activeMotFilter.toUpperCase();
+      });
+    }
+    return list;
+  };
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
@@ -628,12 +643,7 @@ export default function App() {
   // Sync selection when nav or data changes
   useEffect(() => {
     if (currentNav === "CHAR") {
-      const filtered =
-        activeCharFilter === "ALL"
-          ? units
-          : units.filter(
-              (u) => u.faction && u.faction.startsWith(activeCharFilter),
-            );
+      const filtered = getFilteredUnits();
       if (filtered.length > 0) {
         const stillSelected = selectedChar
           ? filtered.find(
@@ -651,26 +661,54 @@ export default function App() {
         }
       }
     } else if (currentNav === "ART") {
-      if (artSet.length > 0 && !selectedArt) setSelectedArt(artSet[0]);
+      const filtered = getFilteredArt();
+      if (filtered.length > 0) {
+        if (!selectedArt || !filtered.includes(selectedArt)) {
+          setSelectedArt(filtered[0]);
+        }
+      } else {
+        setSelectedArt(null);
+      }
     } else if (currentNav === "MOTION") {
-      if (motSet.length > 0 && !selectedMot) setSelectedMot(motSet[0]);
+      const filtered = getFilteredMot();
+      if (filtered.length > 0) {
+        if (!selectedMot || !filtered.includes(selectedMot)) {
+          setSelectedMot(filtered[0]);
+        }
+      } else {
+        setSelectedMot(null);
+      }
     }
   }, [
     currentNav,
     activeCharFilter,
     activeArtFilter,
     activeMotFilter,
+    charSearchQuery,
     units,
     artSet,
     motSet,
+    artCategoryMap,
+    motCategoryMap,
+    systemLogo,
   ]);
 
   const renderSubNav = () => {
+    const handleCategoryWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+      if (e.deltaY !== 0) {
+        e.currentTarget.scrollLeft += e.deltaY;
+      }
+    };
+
     if (currentNav === "CHAR") {
       const filters = ["ALL", ...charCategories];
       return (
         <div className="w-full flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 overflow-x-auto py-1">
+          <div 
+            className="flex items-center gap-2 overflow-x-auto py-1 scroll-smooth"
+            onWheel={handleCategoryWheel}
+            title="ホイールで横スクロール可能"
+          >
             <span className="text-[10px] text-[#666] font-mono tracking-widest uppercase shrink-0 mr-1">
               FACTION:
             </span>
@@ -773,7 +811,11 @@ export default function App() {
       const filters = ["ALL", ...artCategories];
       return (
         <div className="w-full flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 overflow-x-auto py-1">
+          <div 
+            className="flex items-center gap-2 overflow-x-auto py-1 scroll-smooth"
+            onWheel={handleCategoryWheel}
+            title="ホイールで横スクロール可能"
+          >
             <span className="text-[10px] text-[#666] font-mono tracking-widest uppercase shrink-0 mr-1">
               CATEGORY:
             </span>
@@ -842,15 +884,26 @@ export default function App() {
     }
     if (currentNav === "MOTION") {
       const filters = ["ALL", ...motCategories];
-      return filters.map((f) => (
-        <button
-          key={f}
-          className={`mech-btn !w-auto px-5 h-[28px] ${activeMotFilter === f ? "active" : ""}`}
-          onClick={() => setActiveMotFilter(f)}
+      return (
+        <div 
+          className="w-full flex items-center gap-2 overflow-x-auto py-1 scroll-smooth"
+          onWheel={handleCategoryWheel}
+          title="ホイールで横スクロール可能"
         >
-          <span>{f}</span>
-        </button>
-      ));
+          <span className="text-[10px] text-[#666] font-mono tracking-widest uppercase shrink-0 mr-1">
+            CATEGORY:
+          </span>
+          {filters.map((f) => (
+            <button
+              key={f}
+              className={`mech-btn !w-auto px-5 h-[28px] !mb-0 ${activeMotFilter === f ? "active" : ""}`}
+              onClick={() => setActiveMotFilter(f)}
+            >
+              <span>{f}</span>
+            </button>
+          ))}
+        </div>
+      );
     }
     return null;
   };
@@ -1250,7 +1303,7 @@ export default function App() {
                 onWheel={(e) => handleScrollerWheel('MOT', e)}
                 className="ribbon-scroller h-[120px] bg-[#141414] border-t border-[#2a2a2a] flex items-center gap-2 overflow-x-auto px-4 py-2 shrink-0 scroll-smooth cursor-grab active:cursor-grabbing"
               >
-                {motSet.map((mot) => (
+                {getFilteredMot().map((mot) => (
                   <div
                     key={mot}
                     className={`h-[90%] w-auto flex-shrink-0 cursor-pointer border-2 transition-all ${selectedMot === mot ? "border-[#888] opacity-100" : "border-transparent opacity-50 hover:opacity-100"}`}
@@ -1915,6 +1968,214 @@ export default function App() {
   const [adminArtCategories, setAdminArtCategories] = useState(artCategories.join(", "));
   const [adminMotCategories, setAdminMotCategories] = useState(motCategories.join(", "));
 
+  const [adminCategoryFilter, setAdminCategoryFilter] = useState<string>("ALL");
+  const [adminUploadCategory, setAdminUploadCategory] = useState<string>("");
+  const [newCategoryInput, setNewCategoryInput] = useState<string>("");
+  const [editingCatName, setEditingCatName] = useState<string | null>(null);
+  const [editingCatValue, setEditingCatValue] = useState<string>("");
+  const [deleteConfirmCat, setDeleteConfirmCat] = useState<string | null>(null);
+  const [selectedAdminItemIndex, setSelectedAdminItemIndex] = useState<number>(-1);
+
+  const getItemCategory = (tab: string, rawItem: any, index?: number): string => {
+    if (tab === "ART") {
+      const key = typeof rawItem === "string" ? rawItem : (index !== undefined ? artSet[index] : "");
+      return artCategoryMap[key] || defaultAppData.artCategoryMap?.[key] || (artCategories.length > 0 ? artCategories[0] : "CONCEPT");
+    }
+    if (tab === "MOTION") {
+      const key = typeof rawItem === "string" ? rawItem : (index !== undefined ? motSet[index] : "");
+      return motCategoryMap[key] || defaultAppData.motCategoryMap?.[key] || (motCategories.length > 0 ? motCategories[0] : "TECH");
+    }
+    if (tab === "CHAR") {
+      if (rawItem && typeof rawItem === "object" && rawItem.faction) return rawItem.faction;
+      if (index !== undefined && units[index]) return units[index].faction || (charCategories.length > 0 ? charCategories[0] : "HERITAGE");
+      if (typeof rawItem === "string") {
+        const u = units.find((un) => un.name === rawItem || un.file === rawItem);
+        if (u?.faction) return u.faction;
+      }
+      return charCategories.length > 0 ? charCategories[0] : "HERITAGE";
+    }
+    return "";
+  };
+
+  const handleAddCategory = (tab: "ART" | "MOTION" | "CHAR", name: string) => {
+    const trimmed = name.trim().toUpperCase().replace(/[^A-Z0-9_\- ]/g, "");
+    if (!trimmed) return;
+    let p: any = {};
+    if (tab === "ART") {
+      if (artCategories.includes(trimmed)) return;
+      const updated = [...artCategories, trimmed];
+      setArtCategories(updated);
+      setAdminArtCategories(updated.join(", "));
+      p.artCategories = updated;
+    } else if (tab === "MOTION") {
+      if (motCategories.includes(trimmed)) return;
+      const updated = [...motCategories, trimmed];
+      setMotCategories(updated);
+      setAdminMotCategories(updated.join(", "));
+      p.motCategories = updated;
+    } else if (tab === "CHAR") {
+      if (charCategories.includes(trimmed)) return;
+      const updated = [...charCategories, trimmed];
+      setCharCategories(updated);
+      setAdminCharCategories(updated.join(", "));
+      p.charCategories = updated;
+    }
+    setNewCategoryInput("");
+    saveAdminData(p);
+    setUploadMsg(`CATEGORY [${trimmed}] ADDED!`);
+  };
+
+  const handleRenameCategory = (tab: "ART" | "MOTION" | "CHAR", oldCat: string, newName: string) => {
+    const trimmed = newName.trim().toUpperCase().replace(/[^A-Z0-9_\- ]/g, "");
+    if (!trimmed || trimmed === oldCat) {
+      setEditingCatName(null);
+      return;
+    }
+    let p: any = {};
+    if (tab === "ART") {
+      if (artCategories.includes(trimmed)) {
+        setUploadMsg(`CATEGORY [${trimmed}] ALREADY EXISTS!`);
+        setEditingCatName(null);
+        return;
+      }
+      const updatedCats = artCategories.map((c) => (c === oldCat ? trimmed : c));
+      const updatedMap = { ...artCategoryMap };
+      for (const k in updatedMap) {
+        if (updatedMap[k] === oldCat) {
+          updatedMap[k] = trimmed;
+        }
+      }
+      setArtCategories(updatedCats);
+      setAdminArtCategories(updatedCats.join(", "));
+      setArtCategoryMap(updatedMap);
+      p.artCategories = updatedCats;
+      p.artCategoryMap = updatedMap;
+      if (activeArtFilter === oldCat) setActiveArtFilter(trimmed);
+      if (adminCategoryFilter === oldCat) setAdminCategoryFilter(trimmed);
+    } else if (tab === "MOTION") {
+      if (motCategories.includes(trimmed)) {
+        setUploadMsg(`CATEGORY [${trimmed}] ALREADY EXISTS!`);
+        setEditingCatName(null);
+        return;
+      }
+      const updatedCats = motCategories.map((c) => (c === oldCat ? trimmed : c));
+      const updatedMap = { ...motCategoryMap };
+      for (const k in updatedMap) {
+        if (updatedMap[k] === oldCat) {
+          updatedMap[k] = trimmed;
+        }
+      }
+      setMotCategories(updatedCats);
+      setAdminMotCategories(updatedCats.join(", "));
+      setMotCategoryMap(updatedMap);
+      p.motCategories = updatedCats;
+      p.motCategoryMap = updatedMap;
+      if (activeMotFilter === oldCat) setActiveMotFilter(trimmed);
+      if (adminCategoryFilter === oldCat) setAdminCategoryFilter(trimmed);
+    } else if (tab === "CHAR") {
+      if (charCategories.includes(trimmed)) {
+        setUploadMsg(`CATEGORY [${trimmed}] ALREADY EXISTS!`);
+        setEditingCatName(null);
+        return;
+      }
+      const updatedCats = charCategories.map((c) => (c === oldCat ? trimmed : c));
+      const updatedUnits = units.map((u) => (u.faction === oldCat ? { ...u, faction: trimmed } : u));
+      setCharCategories(updatedCats);
+      setAdminCharCategories(updatedCats.join(", "));
+      setUnits(updatedUnits);
+      p.charCategories = updatedCats;
+      p.units = updatedUnits;
+      if (activeCharFilter === oldCat) setActiveCharFilter(trimmed);
+      if (adminCategoryFilter === oldCat) setAdminCategoryFilter(trimmed);
+    }
+    setEditingCatName(null);
+    saveAdminData(p);
+    setUploadMsg(`CATEGORY RENAMED TO [${trimmed}]`);
+  };
+
+  const handleDeleteCategory = (tab: "ART" | "MOTION" | "CHAR", catToDelete: string) => {
+    let p: any = {};
+    if (tab === "ART") {
+      const updatedCats = artCategories.filter((c) => c !== catToDelete);
+      const fallbackCat = updatedCats.length > 0 ? updatedCats[0] : "CONCEPT";
+      const updatedMap = { ...artCategoryMap };
+      for (const k in updatedMap) {
+        if (updatedMap[k] === catToDelete) {
+          updatedMap[k] = fallbackCat;
+        }
+      }
+      setArtCategories(updatedCats);
+      setAdminArtCategories(updatedCats.join(", "));
+      setArtCategoryMap(updatedMap);
+      p.artCategories = updatedCats;
+      p.artCategoryMap = updatedMap;
+      if (activeArtFilter === catToDelete) setActiveArtFilter("ALL");
+      if (adminCategoryFilter === catToDelete) setAdminCategoryFilter("ALL");
+    } else if (tab === "MOTION") {
+      const updatedCats = motCategories.filter((c) => c !== catToDelete);
+      const fallbackCat = updatedCats.length > 0 ? updatedCats[0] : "TECH";
+      const updatedMap = { ...motCategoryMap };
+      for (const k in updatedMap) {
+        if (updatedMap[k] === catToDelete) {
+          updatedMap[k] = fallbackCat;
+        }
+      }
+      setMotCategories(updatedCats);
+      setAdminMotCategories(updatedCats.join(", "));
+      setMotCategoryMap(updatedMap);
+      p.motCategories = updatedCats;
+      p.motCategoryMap = updatedMap;
+      if (activeMotFilter === catToDelete) setActiveMotFilter("ALL");
+      if (adminCategoryFilter === catToDelete) setAdminCategoryFilter("ALL");
+    } else if (tab === "CHAR") {
+      const updatedCats = charCategories.filter((c) => c !== catToDelete);
+      const fallbackCat = updatedCats.length > 0 ? updatedCats[0] : "HERITAGE";
+      const updatedUnits = units.map((u) => (u.faction === catToDelete ? { ...u, faction: fallbackCat } : u));
+      setCharCategories(updatedCats);
+      setAdminCharCategories(updatedCats.join(", "));
+      setUnits(updatedUnits);
+      p.charCategories = updatedCats;
+      p.units = updatedUnits;
+      if (activeCharFilter === catToDelete) setActiveCharFilter("ALL");
+      if (adminCategoryFilter === catToDelete) setAdminCategoryFilter("ALL");
+    }
+    setDeleteConfirmCat(null);
+    saveAdminData(p);
+    setUploadMsg(`CATEGORY [${catToDelete}] REMOVED.`);
+  };
+
+  const handleAssignItemCategory = (tab: "ART" | "MOTION" | "CHAR", rawKeyOrIndex: string | number, newCat: string) => {
+    let p: any = {};
+    if (tab === "ART") {
+      const key = typeof rawKeyOrIndex === "string" ? rawKeyOrIndex : artSet[rawKeyOrIndex];
+      if (!key) return;
+      const updated = { ...artCategoryMap, [key]: newCat };
+      setArtCategoryMap(updated);
+      p.artCategoryMap = updated;
+      setUploadMsg(`ARTWORK MOVED TO [${newCat}]`);
+    } else if (tab === "MOTION") {
+      const key = typeof rawKeyOrIndex === "string" ? rawKeyOrIndex : motSet[rawKeyOrIndex];
+      if (!key) return;
+      const updated = { ...motCategoryMap, [key]: newCat };
+      setMotCategoryMap(updated);
+      p.motCategoryMap = updated;
+      setUploadMsg(`VIDEO MOVED TO [${newCat}]`);
+    } else if (tab === "CHAR") {
+      let idx = typeof rawKeyOrIndex === "number" ? rawKeyOrIndex : units.findIndex((u) => u.name === rawKeyOrIndex);
+      if (idx === -1 && typeof rawKeyOrIndex === "string") {
+        idx = units.findIndex((u) => u.file === rawKeyOrIndex);
+      }
+      if (idx === -1 || !units[idx]) return;
+      const updated = [...units];
+      updated[idx] = { ...updated[idx], faction: newCat };
+      setUnits(updated);
+      setFmFact(newCat);
+      p.units = updated;
+      setUploadMsg(`UNIT [${updated[idx].name}] ASSIGNED TO [${newCat}]`);
+    }
+    saveAdminData(p);
+  };
+
   useEffect(() => {
     setAdminStoryJp(storyJp.join("\n\n"));
   }, [storyJp]);
@@ -1982,17 +2243,18 @@ export default function App() {
         if (thumb) thumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
     } else {
-      if (motSet.length === 0) return;
-      const idx = motSet.indexOf(selectedMot);
+      const list = getFilteredMot();
+      if (list.length === 0) return;
+      const idx = list.indexOf(selectedMot);
       let nextIdx = 0;
       if (idx === -1) {
         nextIdx = 0;
       } else {
         nextIdx = direction === 'left' ? idx - 1 : idx + 1;
-        if (nextIdx < 0) nextIdx = motSet.length - 1;
-        if (nextIdx >= motSet.length) nextIdx = 0;
+        if (nextIdx < 0) nextIdx = list.length - 1;
+        if (nextIdx >= list.length) nextIdx = 0;
       }
-      setSelectedMot(motSet[nextIdx]);
+      setSelectedMot(list[nextIdx]);
       if (motScrollerRef.current) {
         const thumb = motScrollerRef.current.children[nextIdx] as HTMLElement;
         if (thumb) thumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
@@ -2109,6 +2371,8 @@ export default function App() {
       charCategories: adminCharCategories ? adminCharCategories.split(",").map((s) => s.trim()).filter(Boolean) : charCategories,
       artCategories: adminArtCategories ? adminArtCategories.split(",").map((s) => s.trim()).filter(Boolean) : artCategories,
       motCategories: adminMotCategories ? adminMotCategories.split(",").map((s) => s.trim()).filter(Boolean) : motCategories,
+      artCategoryMap,
+      motCategoryMap,
       systemLogo: systemLogo || DEFAULT_SYSTEM_LOGO,
       globalUnitScale: globalUnitScale || 100,
     };
@@ -2239,6 +2503,12 @@ export default function App() {
         setMotCategories(dataToApply.motCategories);
         setAdminMotCategories(dataToApply.motCategories.join(", "));
       }
+      if (dataToApply.artCategoryMap) {
+        setArtCategoryMap(dataToApply.artCategoryMap);
+      }
+      if (dataToApply.motCategoryMap) {
+        setMotCategoryMap(dataToApply.motCategoryMap);
+      }
       if (dataToApply.systemLogo) {
         setSystemLogo(dataToApply.systemLogo);
       }
@@ -2291,6 +2561,12 @@ export default function App() {
     try {
       const effectiveSystemLogo = (payloadToSave?.systemLogo !== undefined ? payloadToSave.systemLogo : systemLogo) || DEFAULT_SYSTEM_LOGO;
       const effectiveLogoSet = payloadToSave?.logoSet !== undefined ? payloadToSave.logoSet : logoSet;
+      const effectiveCharCats = payloadToSave?.charCategories || (adminCharCategories ? adminCharCategories.split(",").map((s) => s.trim()).filter(Boolean) : charCategories);
+      const effectiveArtCats = payloadToSave?.artCategories || (adminArtCategories ? adminArtCategories.split(",").map((s) => s.trim()).filter(Boolean) : artCategories);
+      const effectiveMotCats = payloadToSave?.motCategories || (adminMotCategories ? adminMotCategories.split(",").map((s) => s.trim()).filter(Boolean) : motCategories);
+      const effectiveArtCatMap = payloadToSave?.artCategoryMap || artCategoryMap;
+      const effectiveMotCatMap = payloadToSave?.motCategoryMap || motCategoryMap;
+
       const payload = { 
         units: payloadToSave?.units || units,
         artSet: payloadToSave?.artSet || artSet,
@@ -2304,9 +2580,11 @@ export default function App() {
         splashMode: adminSplashMode,
         splashOpacity: adminSplashOpacity,
         playlistExcludes: adminPlaylistExcludes,
-        charCategories: adminCharCategories.split(",").map((s) => s.trim()).filter(Boolean),
-        artCategories: adminArtCategories.split(",").map((s) => s.trim()).filter(Boolean),
-        motCategories: adminMotCategories.split(",").map((s) => s.trim()).filter(Boolean),
+        charCategories: effectiveCharCats,
+        artCategories: effectiveArtCats,
+        motCategories: effectiveMotCats,
+        artCategoryMap: effectiveArtCatMap,
+        motCategoryMap: effectiveMotCatMap,
         systemLogo: effectiveSystemLogo,
         logoSet: effectiveLogoSet,
         globalUnitScale: payloadToSave?.globalUnitScale !== undefined ? payloadToSave.globalUnitScale : globalUnitScale,
@@ -2329,9 +2607,11 @@ export default function App() {
         setSplashMode(adminSplashMode);
         setSplashOpacity(adminSplashOpacity);
         setPlaylistExcludes(adminPlaylistExcludes);
-        setCharCategories(adminCharCategories.split(",").map((s) => s.trim()).filter(Boolean));
-        setArtCategories(adminArtCategories.split(",").map((s) => s.trim()).filter(Boolean));
-        setMotCategories(adminMotCategories.split(",").map((s) => s.trim()).filter(Boolean));
+        setCharCategories(effectiveCharCats);
+        setArtCategories(effectiveArtCats);
+        setMotCategories(effectiveMotCats);
+        setArtCategoryMap(effectiveArtCatMap);
+        setMotCategoryMap(effectiveMotCatMap);
         setTimeout(() => setSaveStatusMsg(""), 2000);
       } else {
         setSaveStatusMsg("SAVE FAILED (SAVED LOCALLY).");
@@ -2375,18 +2655,26 @@ export default function App() {
           let newMotSet = [...motSet];
           let newLogoSet = [...logoSet];
           let newUnits = [...units];
+          let updatedArtCategoryMap = { ...artCategoryMap };
+          let updatedMotCategoryMap = { ...motCategoryMap };
+
+          const targetArtCat = adminUploadCategory || (artCategories.length > 0 ? artCategories[0] : "CONCEPT");
+          const targetMotCat = adminUploadCategory || (motCategories.length > 0 ? motCategories[0] : "TECH");
+          const targetCharCat = adminUploadCategory || fmFact || (charCategories.length > 0 ? charCategories[0] : "HERITAGE");
 
           for (const fileData of data.files) {
             if (category === "ART") {
               newArtSet.push(fileData.basename);
+              updatedArtCategoryMap[fileData.basename] = targetArtCat;
             } else if (category === "LOGO") {
               newLogoSet.push(fileData.basename);
             } else if (category === "MOTION") {
               newMotSet.push(fileData.basename);
+              updatedMotCategoryMap[fileData.basename] = targetMotCat;
             } else if (category === "CHAR") {
               newUnits.push({
                 name: fmName || "UNKNOWN",
-                faction: fmFact || "UNKNOWN",
+                faction: targetCharCat,
                 role: fmRole || "UNKNOWN",
                 desc: fmDesc || "",
                 descJp: fmDescJp || "",
@@ -2397,14 +2685,18 @@ export default function App() {
 
           if (category === "ART") {
             setArtSet(newArtSet);
+            setArtCategoryMap(updatedArtCategoryMap);
             setSelectedArt(newArtSet[newArtSet.length - 1]);
             p.artSet = newArtSet;
+            p.artCategoryMap = updatedArtCategoryMap;
           } else if (category === "LOGO") {
             setLogoSet(newLogoSet);
             p.logoSet = newLogoSet;
           } else if (category === "MOTION") {
             setMotSet(newMotSet);
+            setMotCategoryMap(updatedMotCategoryMap);
             p.motSet = newMotSet;
+            p.motCategoryMap = updatedMotCategoryMap;
           } else if (category === "CHAR") {
             setUnits(newUnits);
             p.units = newUnits;
@@ -2428,6 +2720,12 @@ export default function App() {
         let newLogoSet = [...logoSet];
         let newMotSet = [...motSet];
         let newUnits = [...units];
+        let updatedArtCategoryMap = { ...artCategoryMap };
+        let updatedMotCategoryMap = { ...motCategoryMap };
+
+        const targetArtCat = adminUploadCategory || (artCategories.length > 0 ? artCategories[0] : "CONCEPT");
+        const targetMotCat = adminUploadCategory || (motCategories.length > 0 ? motCategories[0] : "TECH");
+        const targetCharCat = adminUploadCategory || fmFact || (charCategories.length > 0 ? charCategories[0] : "HERITAGE");
 
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
@@ -2436,14 +2734,16 @@ export default function App() {
 
           if (category === "ART") {
             newArtSet.push(dataUrl);
+            updatedArtCategoryMap[dataUrl] = targetArtCat;
           } else if (category === "LOGO") {
             newLogoSet.push(dataUrl);
           } else if (category === "MOTION") {
             newMotSet.push(dataUrl);
+            updatedMotCategoryMap[dataUrl] = targetMotCat;
           } else if (category === "CHAR") {
             newUnits.push({
               name: fmName || customName.replace(/\.[^/.]+$/, "") || "UNKNOWN",
-              faction: fmFact || "UNKNOWN",
+              faction: targetCharCat,
               role: fmRole || "UNKNOWN",
               desc: fmDesc || "",
               descJp: fmDescJp || "",
@@ -2454,14 +2754,18 @@ export default function App() {
 
         if (category === "ART") {
           setArtSet(newArtSet);
+          setArtCategoryMap(updatedArtCategoryMap);
           setSelectedArt(newArtSet[newArtSet.length - 1]);
           p.artSet = newArtSet;
+          p.artCategoryMap = updatedArtCategoryMap;
         } else if (category === "LOGO") {
           setLogoSet(newLogoSet);
           p.logoSet = newLogoSet;
         } else if (category === "MOTION") {
           setMotSet(newMotSet);
+          setMotCategoryMap(updatedMotCategoryMap);
           p.motSet = newMotSet;
+          p.motCategoryMap = updatedMotCategoryMap;
         } else if (category === "CHAR") {
           setUnits(newUnits);
           p.units = newUnits;
@@ -2605,34 +2909,62 @@ export default function App() {
   const [adminPreviewSrc, setAdminPreviewSrc] = useState("");
 
   const renderAdminScreen = () => {
-    let thumbsData: any[] = [];
+    const currentTabCategories =
+      currentAdminTab === "ART"
+        ? artCategories
+        : currentAdminTab === "MOTION"
+        ? motCategories
+        : currentAdminTab === "CHAR"
+        ? charCategories
+        : [];
+
+    let allThumbsData: any[] = [];
     if (currentAdminTab === "ART")
-      thumbsData = artSet.map((d, i) => ({
+      allThumbsData = artSet.map((d, i) => ({
         f: d.startsWith("data:") ? `LOCAL_ART_${i + 1}` : d,
         src: resolveArtSrc(d),
+        rawKey: d,
+        category: getItemCategory("ART", d, i),
         i,
       }));
     else if (currentAdminTab === "LOGO")
-      thumbsData = logoSet.map((d, i) => ({
+      allThumbsData = logoSet.map((d, i) => ({
         f: d.startsWith("data:") ? `LOCAL_LOGO_${i + 1}` : d,
         src: resolveLogoSrc(d),
+        rawKey: d,
+        category: "LOGO",
         i,
       }));
     else if (currentAdminTab === "MOTION")
-      thumbsData = motSet.map((d, i) => ({
+      allThumbsData = motSet.map((d, i) => ({
         f: d.startsWith("data:") ? `LOCAL_MOTION_${i + 1}` : d,
         src: resolveMotSrc(d),
+        rawKey: d,
+        category: getItemCategory("MOTION", d, i),
         i,
       }));
     else if (currentAdminTab === "CHAR")
-      thumbsData = units.map((d, i) => ({ f: d.name, src: d.file, i }));
+      allThumbsData = units.map((d, i) => ({
+        f: d.name,
+        src: d.file,
+        rawKey: d.name,
+        category: getItemCategory("CHAR", d, i),
+        i,
+      }));
     else if (currentAdminTab === "HOME_MEDIA") {
-      thumbsData = [
-        ...artSet.map((d, i) => ({ f: d.startsWith("data:") ? `LOCAL_ART_${i + 1}` : d, src: resolveArtSrc(d) })),
-        ...motSet.map((d, i) => ({ f: d.startsWith("data:") ? `LOCAL_MOTION_${i + 1}` : d, src: resolveMotSrc(d) })),
-        ...units.map((d) => ({ f: d.name, src: d.file })),
+      allThumbsData = [
+        ...artSet.map((d, i) => ({ f: d.startsWith("data:") ? `LOCAL_ART_${i + 1}` : d, src: resolveArtSrc(d), rawKey: d, category: getItemCategory("ART", d, i), i })),
+        ...motSet.map((d, i) => ({ f: d.startsWith("data:") ? `LOCAL_MOTION_${i + 1}` : d, src: resolveMotSrc(d), rawKey: d, category: getItemCategory("MOTION", d, i), i })),
+        ...units.map((d, i) => ({ f: d.name, src: d.file, rawKey: d.name, category: getItemCategory("CHAR", d, i), i })),
       ];
     }
+
+    const thumbsData = allThumbsData.filter((item) => {
+      if (adminCategoryFilter === "ALL" || !currentTabCategories.includes(adminCategoryFilter)) {
+        return true;
+      }
+      return (item.category || "").toUpperCase() === adminCategoryFilter.toUpperCase();
+    });
 
     return (
       <section
@@ -3219,6 +3551,36 @@ export default function App() {
                     {currentAdminTab === "CHAR" && "CAST ROSTER"}
                     {currentAdminTab === "LOGO" && "SYSTEM LOGO"}
                   </div>
+
+                  {currentTabCategories.length > 0 && (
+                    <div className="bg-[#101010] border border-[#262626] p-2.5 flex flex-col gap-1.5 mt-1">
+                      <div className="text-[9px] font-mono text-[#888] flex justify-between items-center">
+                        <span>UPLOAD ASSIGN CATEGORY:</span>
+                        <span className="text-[#00ffcc] font-bold">
+                          {adminUploadCategory || currentTabCategories[0]}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {currentTabCategories.map((cat) => {
+                          const isSelected = (adminUploadCategory || currentTabCategories[0]) === cat;
+                          return (
+                            <button
+                              key={cat}
+                              type="button"
+                              onClick={() => setAdminUploadCategory(cat)}
+                              className={`px-2 py-1 text-[9px] font-mono font-bold border transition-colors ${
+                                isSelected
+                                  ? "bg-[var(--emerald-primary)] text-black border-[var(--emerald-primary)]"
+                                  : "bg-[#181818] text-[#888] border-[#333] hover:text-white hover:border-[#555]"
+                              }`}
+                            >
+                              {cat}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-[8px]">
@@ -3555,42 +3917,201 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="mt-auto">
-                  {/* Category textareas based on tab... */}
-                  <div className="flex-col gap-[8px] text-[11px] bg-[#151515] border border-[#333] p-[15px] shrink-0 flex hidden">
-                    <div className="text-[var(--emerald-primary)] font-['Orbitron'] text-[12px] mb-[4px]">
-                      CATEGORIES
+                {currentTabCategories.length > 0 && (
+                  <div className="mt-auto flex flex-col gap-[8px] text-[11px] bg-[#141414] border border-[#262626] p-[12px] shrink-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[var(--emerald-primary)] font-['Orbitron'] text-[11px] font-bold tracking-wider">
+                        CATEGORY MANAGER
+                      </span>
+                      <span className="text-[9px] font-mono text-[#666]">
+                        {currentTabCategories.length} CATEGORIES
+                      </span>
                     </div>
-                    {currentAdminTab === "CHAR" && (
-                      <textarea
-                        rows={2}
-                        className="bg-[#0a0a0a] text-[#ccc] border border-[#222] p-[8px] outline-none focus:border-[var(--emerald-primary)]"
-                        value={adminCharCategories}
-                        onChange={(e) => setAdminCharCategories(e.target.value)}
-                      ></textarea>
-                    )}
-                    {currentAdminTab === "ART" && (
-                      <textarea
-                        rows={2}
-                        className="bg-[#0a0a0a] text-[#ccc] border border-[#222] p-[8px] outline-none focus:border-[var(--emerald-primary)]"
-                        value={adminArtCategories}
-                        onChange={(e) => setAdminArtCategories(e.target.value)}
-                      ></textarea>
-                    )}
-                    {currentAdminTab === "MOTION" && (
-                      <textarea
-                        rows={2}
-                        className="bg-[#0a0a0a] text-[#ccc] border border-[#222] p-[8px] outline-none focus:border-[var(--emerald-primary)]"
-                        value={adminMotCategories}
-                        onChange={(e) => setAdminMotCategories(e.target.value)}
-                      ></textarea>
-                    )}
+
+                    {/* Category list with edit and delete */}
+                    <div className="flex flex-col gap-1.5 py-1 max-h-[140px] overflow-y-auto pr-0.5">
+                      {currentTabCategories.map((cat) => {
+                        const isEditing = editingCatName === cat;
+                        const isConfirmingDelete = deleteConfirmCat === cat;
+
+                        if (isEditing) {
+                          return (
+                            <div key={cat} className="flex items-center gap-1 bg-[#1c1c1c] border border-[var(--emerald-primary)] p-1">
+                              <input
+                                type="text"
+                                autoFocus
+                                className="flex-1 bg-[#0a0a0a] text-white border border-[#444] px-1.5 py-0.5 text-[10px] font-mono uppercase outline-none focus:border-[var(--emerald-primary)]"
+                                value={editingCatValue}
+                                onChange={(e) => setEditingCatValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" && editingCatValue.trim()) {
+                                    handleRenameCategory(currentAdminTab as any, cat, editingCatValue);
+                                  } else if (e.key === "Escape") {
+                                    setEditingCatName(null);
+                                  }
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (editingCatValue.trim()) {
+                                    handleRenameCategory(currentAdminTab as any, cat, editingCatValue);
+                                  }
+                                }}
+                                className="px-2 py-0.5 bg-[#00ffcc] text-black text-[9px] font-bold font-mono hover:bg-[#33ffdd] cursor-pointer"
+                                title="保存"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingCatName(null)}
+                                className="px-1.5 py-0.5 bg-[#222] text-[#888] text-[9px] font-mono hover:text-white cursor-pointer"
+                                title="キャンセル"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div
+                            key={cat}
+                            className="flex items-center justify-between bg-[#181818] border border-[#2e2e2e] hover:border-[#444] px-2 py-1 transition-colors group"
+                          >
+                            <span className="text-[10px] font-mono font-bold text-[#ddd] truncate mr-1">
+                              {cat}
+                            </span>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              {/* Rename button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingCatName(cat);
+                                  setEditingCatValue(cat);
+                                  setDeleteConfirmCat(null);
+                                }}
+                                className="text-[#888] hover:text-[#00ffcc] text-[9px] px-1 py-0.5 hover:bg-[#252525] rounded transition-colors cursor-pointer"
+                                title="カテゴリー名を編集"
+                              >
+                                ✎
+                              </button>
+
+                              {/* Delete button with in-UI confirmation */}
+                              {isConfirmingDelete ? (
+                                <div className="flex items-center gap-0.5 bg-[#331111] px-1 py-0.2 border border-[#661111]">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteCategory(currentAdminTab as any, cat)}
+                                    className="text-[#ff4444] font-bold text-[8px] font-mono hover:underline cursor-pointer"
+                                    title="本当に削除する"
+                                  >
+                                    DEL?
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeleteConfirmCat(null)}
+                                    className="text-[#888] text-[8px] font-mono hover:text-white cursor-pointer pl-1"
+                                    title="取り消し"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteConfirmCat(cat)}
+                                  className="text-[#666] hover:text-[#ff4444] text-[9px] px-1 py-0.5 hover:bg-[#252525] rounded transition-colors cursor-pointer"
+                                  title="削除"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Add new Category */}
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <input
+                        type="text"
+                        placeholder="NEW CATEGORY NAME"
+                        className="flex-1 bg-[#0a0a0a] text-white border border-[#333] px-2 py-1 text-[10px] font-mono uppercase outline-none focus:border-[var(--emerald-primary)]"
+                        value={newCategoryInput}
+                        onChange={(e) => setNewCategoryInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && newCategoryInput.trim()) {
+                            handleAddCategory(currentAdminTab as any, newCategoryInput);
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (newCategoryInput.trim()) {
+                            handleAddCategory(currentAdminTab as any, newCategoryInput);
+                          }
+                        }}
+                        disabled={!newCategoryInput.trim()}
+                        className="px-2.5 py-1 bg-[#222] hover:bg-[#333] disabled:opacity-30 text-[#00ffcc] border border-[#444] text-[10px] font-bold transition-colors cursor-pointer whitespace-nowrap"
+                      >
+                        + ADD
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* RIGHT MAIN PANEL */}
               <div className="flex-1 flex flex-col min-w-0 h-full">
+                {/* CATEGORY FILTER BAR */}
+                {currentTabCategories.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-[#141414] border-b border-[#242424] text-[11px] font-mono shrink-0 select-none">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[#888] font-bold mr-1 text-[10px] tracking-wider uppercase font-['Orbitron']">
+                        CATEGORY FILTER:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setAdminCategoryFilter("ALL")}
+                        className={`px-2.5 py-1 text-[10px] font-bold font-mono transition-colors border cursor-pointer ${
+                          adminCategoryFilter === "ALL" || !currentTabCategories.includes(adminCategoryFilter)
+                            ? "bg-[var(--emerald-primary)] text-black border-[var(--emerald-primary)]"
+                            : "bg-[#1f1f1f] text-[#aaa] border-[#333] hover:text-white hover:border-[#555]"
+                        }`}
+                      >
+                        ALL ({allThumbsData.length})
+                      </button>
+                      {currentTabCategories.map((cat) => {
+                        const count = allThumbsData.filter((item) => (item.category || "").toUpperCase() === cat.toUpperCase()).length;
+                        const isSelected = adminCategoryFilter === cat;
+                        return (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => setAdminCategoryFilter(cat)}
+                            className={`px-2.5 py-1 text-[10px] font-bold font-mono transition-colors border cursor-pointer ${
+                              isSelected
+                                ? "bg-[var(--emerald-primary)] text-black border-[var(--emerald-primary)]"
+                                : "bg-[#1a1a1a] text-[#aaa] border-[#333] hover:text-white hover:border-[#555]"
+                            }`}
+                          >
+                            {cat} ({count})
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="text-[9px] text-[#888] font-mono">
+                      SHOWING <strong className="text-white">{thumbsData.length}</strong> / {allThumbsData.length}
+                    </div>
+                  </div>
+                )}
+
                 {/* GALLERY REORDER BAR */}
                 <div className="flex items-center justify-between px-3 py-2 bg-[#121212] border-b border-[#2a2a2a] text-[10px] font-mono shrink-0 select-none">
                   <div className="flex items-center gap-2">
@@ -3602,7 +4123,7 @@ export default function App() {
                     </span>
                     <span className="text-[#444] hidden sm:inline">//</span>
                     <span className="text-[#888] text-[9px] hidden sm:inline">
-                      ドラッグ＆ドロップ または [◀][▶] で並べ替え
+                      ドラッグ＆ドロップ または [◀][▶] で並べ替え（カテゴリー変更はカード下部のCATで即座に変更可能）
                     </span>
                   </div>
                   <div className="text-[9px] text-[#00ffcc] font-mono tracking-widest hidden md:block">
@@ -3611,29 +4132,29 @@ export default function App() {
                 </div>
 
                 {/* GALLERY TOP AREA */}
-                <div className="min-h-[210px] max-h-[270px] shrink-0 overflow-y-auto content-start flex flex-wrap gap-[12px] p-[10px] bg-[#0a0a0a]">
+                <div className="min-h-[220px] max-h-[290px] shrink-0 overflow-y-auto content-start flex flex-wrap gap-[12px] p-[10px] bg-[#0a0a0a]">
                   {thumbsData.map((item, idx) => (
                     <div
-                      key={idx}
+                      key={item.i}
                       draggable={currentAdminTab !== "HOME_MEDIA"}
                       onDragStart={(e) => {
-                        e.dataTransfer.setData("text/plain", String(idx));
-                        setDraggedAdminIndex(idx);
+                        e.dataTransfer.setData("text/plain", String(item.i));
+                        setDraggedAdminIndex(item.i);
                       }}
                       onDragOver={(e) => {
                         e.preventDefault();
                         e.dataTransfer.dropEffect = "move";
                       }}
-                      onDragEnter={() => setDragOverAdminIndex(idx)}
+                      onDragEnter={() => setDragOverAdminIndex(item.i)}
                       onDragLeave={() => {
-                        if (dragOverAdminIndex === idx) setDragOverAdminIndex(null);
+                        if (dragOverAdminIndex === item.i) setDragOverAdminIndex(null);
                       }}
                       onDrop={(e) => {
                         e.preventDefault();
                         const fromStr = e.dataTransfer.getData("text/plain");
                         const from = Number(fromStr);
-                        if (!isNaN(from) && from !== idx) {
-                          moveAdminItem(from, idx);
+                        if (!isNaN(from) && from !== item.i) {
+                          moveAdminItem(from, item.i);
                         }
                         setDraggedAdminIndex(null);
                         setDragOverAdminIndex(null);
@@ -3642,24 +4163,24 @@ export default function App() {
                         setDraggedAdminIndex(null);
                         setDragOverAdminIndex(null);
                       }}
-                      className={`w-[124px] bg-[#161616] border relative cursor-pointer group transition-all flex flex-col select-none ${
-                        draggedAdminIndex === idx
+                      className={`w-[130px] bg-[#161616] border relative cursor-pointer group transition-all flex flex-col select-none ${
+                        draggedAdminIndex === item.i
                           ? "opacity-40 border-[#00ffcc] scale-95"
-                          : dragOverAdminIndex === idx
+                          : dragOverAdminIndex === item.i
                           ? "border-[#00ffcc] bg-[#112420] shadow-[0_0_12px_rgba(0,255,204,0.4)] scale-105 z-20"
                           : "border-[#2e2e2e] hover:border-[#666]"
                       }`}
                       onClick={() => {
                         setAdminPreviewSrc(item.src);
                         if (currentAdminTab === "CHAR") {
-                          setAdminSelectedCharIndex(idx);
-                          setFmName(units[idx].name || "");
-                          setFmFact(units[idx].faction || "");
-                          setFmRole(units[idx].role || "");
-                          setFmDesc(units[idx].desc || "");
-                          setFmDescJp(units[idx].descJp || "");
-                          setFmScale(getUnitScale(units[idx]));
-                          setFmOffsetY(getUnitOffsetY(units[idx]));
+                          setAdminSelectedCharIndex(item.i);
+                          setFmName(units[item.i].name || "");
+                          setFmFact(units[item.i].faction || "");
+                          setFmRole(units[item.i].role || "");
+                          setFmDesc(units[item.i].desc || "");
+                          setFmDescJp(units[item.i].descJp || "");
+                          setFmScale(getUnitScale(units[item.i]));
+                          setFmOffsetY(getUnitOffsetY(units[item.i]));
                         } else if (currentAdminTab === "LOGO") {
                           // logo selection handled below
                         }
@@ -3683,7 +4204,7 @@ export default function App() {
 
                         {/* Order Sequence Badge */}
                         <div className="absolute top-1 left-1 bg-black/85 border border-[#3a3a3a] px-1 py-0.2 text-[8px] font-mono text-[#00ffcc] font-bold tracking-wider z-10">
-                          #{String(idx + 1).padStart(2, "0")}
+                          #{String(item.i + 1).padStart(2, "0")}
                         </div>
 
                         {/* Delete Button */}
@@ -3692,7 +4213,7 @@ export default function App() {
                             className="text-[9px] font-bold bg-[#b00]/90 hover:bg-[#f00] text-white border border-[#400] rounded-full cursor-pointer w-[20px] h-[20px] flex items-center justify-center shadow-md"
                             onClick={(e) => {
                               e.stopPropagation();
-                              deleteAdminItem(idx);
+                              deleteAdminItem(item.i);
                             }}
                             title="Delete"
                           >
@@ -3706,13 +4227,33 @@ export default function App() {
                         {item.f}
                       </div>
 
+                      {/* Category Switcher Dropdown */}
+                      {currentTabCategories.length > 0 && (
+                        <div className="px-[4px] py-[2px] bg-[#0e0e0e] border-t border-[#222] flex items-center justify-between gap-1" onClick={(e) => e.stopPropagation()}>
+                          <span className="text-[7px] font-mono text-[#666]">CAT:</span>
+                          <select
+                            className="flex-1 bg-[#1a1a1a] text-[#00ffcc] border border-[#333] text-[8px] font-mono font-bold px-1 py-0.5 outline-none cursor-pointer focus:border-[var(--emerald-primary)] truncate"
+                            value={item.category || currentTabCategories[0]}
+                            onChange={(e) => {
+                              handleAssignItemCategory(currentAdminTab as any, item.rawKey, e.target.value);
+                            }}
+                          >
+                            {currentTabCategories.map((c) => (
+                              <option key={c} value={c} className="bg-[#111] text-white">
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
                       {/* Reorder Buttons (Move left / right) */}
                       {currentAdminTab !== "HOME_MEDIA" && (
                         <div className="grid grid-cols-2 gap-1 p-[3px] bg-[#0d0d0d] border-t border-[#222]" onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
-                            disabled={idx === 0}
-                            onClick={() => moveAdminItem(idx, idx - 1)}
+                            disabled={item.i === 0}
+                            onClick={() => moveAdminItem(item.i, item.i - 1)}
                             className="text-[9px] py-0.5 bg-[#1a1a1a] hover:bg-[#2e2e2e] disabled:opacity-20 disabled:hover:bg-[#1a1a1a] text-[#ccc] hover:text-white border border-[#333] flex items-center justify-center font-mono font-bold transition-colors cursor-pointer disabled:cursor-not-allowed"
                             title="前へ移動 (◀)"
                           >
@@ -3720,8 +4261,8 @@ export default function App() {
                           </button>
                           <button
                             type="button"
-                            disabled={idx === thumbsData.length - 1}
-                            onClick={() => moveAdminItem(idx, idx + 1)}
+                            disabled={item.i === allThumbsData.length - 1}
+                            onClick={() => moveAdminItem(item.i, item.i + 1)}
                             className="text-[9px] py-0.5 bg-[#1a1a1a] hover:bg-[#2e2e2e] disabled:opacity-20 disabled:hover:bg-[#1a1a1a] text-[#ccc] hover:text-white border border-[#333] flex items-center justify-center font-mono font-bold transition-colors cursor-pointer disabled:cursor-not-allowed"
                             title="次へ移動 (▶)"
                           >
@@ -4590,6 +5131,22 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* SPLASH, PROLOGUE & BOOT SCREEN TOP-RIGHT FULLSCREEN BUTTON */}
+      {(currentScreen === "splash" || currentScreen === "story" || currentScreen === "boot") && (
+        <button
+          type="button"
+          onClick={toggleFullscreen}
+          title={isFullscreen ? "全画面表示を解除 (ESC)" : "フルスクリーン表示 (全画面)"}
+          className="fixed top-2.5 right-2.5 z-[9999] w-6 h-6 bg-[#0a0a0a]/60 hover:bg-[#1c1c1c]/90 backdrop-blur-[2px] border border-[#2a2a2a] hover:border-[#555] text-[#777] hover:text-[#eee] flex items-center justify-center transition-all cursor-pointer shadow-sm group opacity-75 hover:opacity-100"
+        >
+          {isFullscreen ? (
+            <Minimize2 size={11} className="transition-transform group-hover:scale-110" />
+          ) : (
+            <Maximize2 size={11} className="transition-transform group-hover:scale-110" />
+          )}
+        </button>
       )}
 
       {currentScreen === "admin" && renderAdminScreen()}

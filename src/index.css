@@ -384,18 +384,19 @@ body {
 
 /* 7. SCROLLBARS */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: #000;
+  background: #0d0d0d;
 }
 ::-webkit-scrollbar-thumb {
-  background: #222;
-  border: 1px solid #333;
+  background: #2a2a2a;
+  border: 1px solid #3d3d3d;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--emerald-dim);
+  background: #555;
+  border-color: #777;
 }
 
 /* CRITICAL DYNAMIC TRANSITIONS */

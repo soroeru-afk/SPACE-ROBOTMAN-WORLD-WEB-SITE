@@ -42,6 +42,8 @@ export interface AppData {
   charCategories: string[];
   artCategories: string[];
   motCategories: string[];
+  artCategoryMap?: Record<string, string>;
+  motCategoryMap?: Record<string, string>;
   systemLogo: string;
   logoSet: string[];
   adminPin?: string;
@@ -281,10 +283,30 @@ export const defaultAppData: AppData = {
     "CONCEPT",
     "ENVIRON"
   ],
+  artCategoryMap: {
+    "001.jpg": "CONCEPT",
+    "002.jpg": "CONCEPT",
+    "003.jpg": "CONCEPT",
+    "004.jpg": "CONCEPT",
+    "005.jpg": "CONCEPT",
+    "006.jpg": "ENVIRON",
+    "007.jpg": "ENVIRON",
+    "008.jpg": "ENVIRON",
+    "009.jpg": "ENVIRON",
+    "010.jpg": "ENVIRON"
+  },
   motCategories: [
     "TECH",
     "RECON"
   ],
+  motCategoryMap: {
+    "grok-video-1abb2451-8444-4d2a-9d86-aca8f39cef9e%20(1).mp4": "TECH",
+    "grok-video-2b5f32b0-87be-470e-8b16-5d86aea82e1f.mp4": "TECH",
+    "grok-video-37ae89e1-6e22-4575-a24d-237f150eaea5.mp4": "TECH",
+    "grok-video-4944cb97-7847-4a57-857f-d1dfe7e21cb1.mp4": "RECON",
+    "grok-video-5c6336bc-53f7-4aa8-adb3-fb01ac992437(4).mp4": "RECON",
+    "grok-video-0e0eab60-b746-41e0-b7fc-fd47177966eb.mp4": "RECON"
+  },
   systemLogo: "assets/logos/imageSSS.png",
   logoSet: [
     "imageSSS.png"
@@ -311,6 +333,11 @@ export function loadInitialData(): AppData {
             motSet: parsed.motSet && parsed.motSet.length > 0 ? parsed.motSet : defaultAppData.motSet,
             logoSet: parsed.logoSet && parsed.logoSet.length > 0 ? parsed.logoSet : defaultAppData.logoSet,
             systemLogo: parsed.systemLogo && parsed.systemLogo.trim() !== "" ? parsed.systemLogo : defaultAppData.systemLogo,
+            artCategoryMap: (parsed.artCategoryMap && typeof parsed.artCategoryMap === "object") ? { ...defaultAppData.artCategoryMap, ...parsed.artCategoryMap } : defaultAppData.artCategoryMap,
+            motCategoryMap: (parsed.motCategoryMap && typeof parsed.motCategoryMap === "object") ? { ...defaultAppData.motCategoryMap, ...parsed.motCategoryMap } : defaultAppData.motCategoryMap,
+            charCategories: (parsed.charCategories && Array.isArray(parsed.charCategories) && parsed.charCategories.length > 0) ? parsed.charCategories : defaultAppData.charCategories,
+            artCategories: (parsed.artCategories && Array.isArray(parsed.artCategories) && parsed.artCategories.length > 0) ? parsed.artCategories : defaultAppData.artCategories,
+            motCategories: (parsed.motCategories && Array.isArray(parsed.motCategories) && parsed.motCategories.length > 0) ? parsed.motCategories : defaultAppData.motCategories,
             adminPin: (parsed.adminPin && typeof parsed.adminPin === "string" && parsed.adminPin.length === 4) ? parsed.adminPin : (defaultAppData.adminPin || "0000"),
             globalUnitScale: typeof parsed.globalUnitScale === "number" ? parsed.globalUnitScale : 100,
           };
