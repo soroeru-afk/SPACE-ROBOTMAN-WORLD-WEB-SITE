@@ -4,13 +4,12 @@
  */
 
 import { usePWAInstall } from "./usePWAInstall";
-import PWAInstallButton from "./components/PWAInstallButton";
-import OfflineIndicator from "./components/OfflineIndicator";
+import { PWAInstallButton } from "./components/PWAInstallButton";
+import { OfflineIndicator } from "./components/OfflineIndicator";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { ChevronLeft, ChevronRight, LayoutGrid, List, Monitor, Search, Shield, Zap, Cpu, Activity, Sparkles, ExternalLink, Maximize2, Minimize2, Download, Upload, FileJson, Check, AlertCircle, RefreshCw, Copy, Database, Lock, Key, Delete } from "lucide-react";
 import { loadInitialData, saveToLocalData, defaultAppData } from "./defaultData";
 import { loadAppDataFromIndexedDB, readFileAsDataURL } from "./idbStorage";
-import { OfflineIndicator } from "./components/OfflineIndicator";
 
 const TypewriterLine = ({ text }: { text: string }) => {
   const [displayed, setDisplayed] = useState("");
@@ -138,8 +137,6 @@ const mergeUnitScales = (loadedUnits: any[]): any[] => {
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState("splash");
-
-  const { isInstallable, installPWA } = usePWAInstall();
 
   // Synchronize browser/PWA header color (meta theme-color) dynamically per screen
   useEffect(() => {
