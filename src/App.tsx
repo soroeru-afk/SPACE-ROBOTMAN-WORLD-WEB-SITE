@@ -335,18 +335,6 @@ export default function App() {
     };
   }, []);
 
-  // Synchronize browser/PWA header color (meta theme-color) dynamically per screen
-  useEffect(() => {
-    let meta = document.querySelector('meta[name="theme-color"]');
-    if (!meta) {
-      meta = document.createElement('meta');
-      meta.setAttribute('name', 'theme-color');
-      document.head.appendChild(meta);
-    }
-    const targetColor = (currentScreen === "dash") ? "#121212" : "#000000";
-    meta.setAttribute('content', targetColor);
-  }, [currentScreen]);
-
   const [units, setUnits] = useState<any[]>(() => {
     const base = (initialCachedData.units && initialCachedData.units.length > 0) ? initialCachedData.units : defaultAppData.units;
     return mergeUnitScales(base);
@@ -893,16 +881,16 @@ export default function App() {
 
             {/* Grid View Controls (when in GRID mode) - Upper slider & Background selector */}
             {charViewMode === "GRID" && (
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
                 {/* Scale Slider */}
-                <div className="flex items-center gap-1.5 bg-[#161616] border border-[#2e2e2e] px-2 py-0.5" title="機体画像全体の表示倍率（縦横比は一定）">
+                <div className="flex items-center gap-1.5 bg-[#161616] border border-[#2e2e2e] px-2 py-0.5 shrink-0" title="機体画像全体の表示倍率（縦横比は一定）">
                   <span className="text-[9px] text-[#777] font-mono tracking-wider uppercase shrink-0">
                     SCALE:
                   </span>
                   <button
                     type="button"
                     onClick={() => updateCharGridScale(charGridScale - 5)}
-                    className="w-4 h-4 flex items-center justify-center text-[10px] text-[#888] hover:text-white bg-[#222] hover:bg-[#333] border border-[#3a3a3a] cursor-pointer"
+                    className="w-4 h-4 flex items-center justify-center text-[10px] text-[#888] hover:text-white bg-[#222] hover:bg-[#333] border border-[#3a3a3a] cursor-pointer shrink-0"
                     title="5% 縮小"
                   >
                     -
@@ -914,13 +902,13 @@ export default function App() {
                     step={5}
                     value={charGridScale}
                     onChange={(e) => updateCharGridScale(Number(e.target.value))}
-                    className="w-14 sm:w-20 accent-white h-1.5 bg-[#262626] cursor-pointer"
+                    className="w-14 sm:w-20 accent-white h-1.5 bg-[#262626] cursor-pointer shrink-0"
                     title={`グリッド画像表示倍率: ${charGridScale}%`}
                   />
                   <button
                     type="button"
                     onClick={() => updateCharGridScale(charGridScale + 5)}
-                    className="w-4 h-4 flex items-center justify-center text-[10px] text-[#888] hover:text-white bg-[#222] hover:bg-[#333] border border-[#3a3a3a] cursor-pointer"
+                    className="w-4 h-4 flex items-center justify-center text-[10px] text-[#888] hover:text-white bg-[#222] hover:bg-[#333] border border-[#3a3a3a] cursor-pointer shrink-0"
                     title="5% 拡大"
                   >
                     +
@@ -928,27 +916,30 @@ export default function App() {
                   <span className="font-mono text-[10px] text-white font-bold min-w-[32px] text-right shrink-0">
                     {charGridScale}%
                   </span>
-                  {charGridScale !== 100 && (
-                    <button
-                      type="button"
-                      onClick={() => updateCharGridScale(100)}
-                      className="text-[8px] font-mono text-[#888] hover:text-white underline ml-0.5 cursor-pointer"
-                      title="標準(100%)に戻す"
-                    >
-                      RST
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    disabled={charGridScale === 100}
+                    onClick={() => updateCharGridScale(100)}
+                    className={`text-[8px] font-mono underline ml-0.5 cursor-pointer transition-opacity shrink-0 ${
+                      charGridScale !== 100
+                        ? "text-[#888] hover:text-white opacity-100"
+                        : "opacity-0 pointer-events-none"
+                    }`}
+                    title="標準(100%)に戻す"
+                  >
+                    RST
+                  </button>
                 </div>
 
                 {/* Vertical Spacing / Padding Slider (上下の空間幅・パディング調整) */}
-                <div className="flex items-center gap-1.5 bg-[#161616] border border-[#2e2e2e] px-2 py-0.5" title="機体画像カード内の上下余白（空間幅）を調整">
+                <div className="flex items-center gap-1.5 bg-[#161616] border border-[#2e2e2e] px-2 py-0.5 shrink-0" title="機体画像カード内の上下余白（空間幅）を調整">
                   <span className="text-[9px] text-[#777] font-mono tracking-wider uppercase shrink-0">
                     V-PAD:
                   </span>
                   <button
                     type="button"
                     onClick={() => updateCharGridPaddingY(charGridPaddingY - 2)}
-                    className="w-4 h-4 flex items-center justify-center text-[10px] text-[#888] hover:text-white bg-[#222] hover:bg-[#333] border border-[#3a3a3a] cursor-pointer"
+                    className="w-4 h-4 flex items-center justify-center text-[10px] text-[#888] hover:text-white bg-[#222] hover:bg-[#333] border border-[#3a3a3a] cursor-pointer shrink-0"
                     title="上下余白を2px縮小"
                   >
                     -
@@ -960,13 +951,13 @@ export default function App() {
                     step={2}
                     value={charGridPaddingY}
                     onChange={(e) => updateCharGridPaddingY(Number(e.target.value))}
-                    className="w-12 sm:w-16 accent-white h-1.5 bg-[#262626] cursor-pointer"
+                    className="w-12 sm:w-16 accent-white h-1.5 bg-[#262626] cursor-pointer shrink-0"
                     title={`上下余白幅: ${charGridPaddingY}px`}
                   />
                   <button
                     type="button"
                     onClick={() => updateCharGridPaddingY(charGridPaddingY + 2)}
-                    className="w-4 h-4 flex items-center justify-center text-[10px] text-[#888] hover:text-white bg-[#222] hover:bg-[#333] border border-[#3a3a3a] cursor-pointer"
+                    className="w-4 h-4 flex items-center justify-center text-[10px] text-[#888] hover:text-white bg-[#222] hover:bg-[#333] border border-[#3a3a3a] cursor-pointer shrink-0"
                     title="上下余白を2px拡大"
                   >
                     +
@@ -974,21 +965,24 @@ export default function App() {
                   <span className="font-mono text-[10px] text-white font-bold min-w-[28px] text-right shrink-0">
                     {charGridPaddingY}px
                   </span>
-                  {charGridPaddingY !== 18 && (
-                    <button
-                      type="button"
-                      onClick={() => updateCharGridPaddingY(18)}
-                      className="text-[8px] font-mono text-[#888] hover:text-white underline ml-0.5 cursor-pointer"
-                      title="標準(18px)に戻す"
-                    >
-                      RST
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    disabled={charGridPaddingY === 18}
+                    onClick={() => updateCharGridPaddingY(18)}
+                    className={`text-[8px] font-mono underline ml-0.5 cursor-pointer transition-opacity shrink-0 ${
+                      charGridPaddingY !== 18
+                        ? "text-[#888] hover:text-white opacity-100"
+                        : "opacity-0 pointer-events-none"
+                    }`}
+                    title="標準(18px)に戻す"
+                  >
+                    RST
+                  </button>
                 </div>
 
-                {/* Background Mode Selector */}
-                <div className="flex items-center gap-1 bg-[#161616] border border-[#2e2e2e] p-0.5">
-                  <span className="text-[9px] text-[#777] font-mono tracking-wider px-1.5 uppercase">
+                {/* Background Mode Selector - Fixed button dimensions and consistent borders prevent any layout shift */}
+                <div className="flex items-center gap-1 bg-[#161616] border border-[#2e2e2e] p-0.5 shrink-0">
+                  <span className="text-[9px] text-[#777] font-mono tracking-wider px-1.5 uppercase shrink-0">
                     BG:
                   </span>
                   {(["AUTO", "BLACK", "WHITE"] as const).map((mode) => (
@@ -996,14 +990,14 @@ export default function App() {
                       key={mode}
                       type="button"
                       onClick={() => updateCharGridBgMode(mode)}
-                      className={`px-1.5 py-0.5 text-[9px] font-mono font-bold transition-all cursor-pointer ${
+                      className={`w-[46px] h-[20px] flex items-center justify-center text-[9px] font-mono font-bold transition-colors cursor-pointer border box-border shrink-0 select-none ${
                         charGridBgMode === mode
                           ? mode === "WHITE"
-                            ? "bg-white text-black font-extrabold shadow-sm"
+                            ? "bg-white text-black border-white shadow-sm"
                             : mode === "BLACK"
-                            ? "bg-black text-white border border-[#555] font-extrabold shadow-sm"
-                            : "bg-[#252525] text-[#00ffcc] border border-[#00ffcc]/40 font-extrabold shadow-sm"
-                          : "text-[#777] hover:text-[#bbb] hover:bg-[#222]"
+                            ? "bg-[#0a0a0a] text-white border-[#666] shadow-sm"
+                            : "bg-[#252525] text-[#00ffcc] border-[#00ffcc]/60 shadow-sm"
+                          : "border-transparent text-[#777] hover:text-[#bbb] hover:bg-[#222]"
                       }`}
                       title={
                         mode === "AUTO"
@@ -1625,7 +1619,7 @@ export default function App() {
                     <div className="flex items-center gap-2 sm:gap-3 text-[9px] font-mono">
                       <div className="flex items-center gap-1.5 bg-[#141414] border border-[#2a2a2a] px-2 py-0.5">
                         <span className="text-[#666]">BG:</span>
-                        <span className={`font-bold tracking-wider ${
+                        <span className={`font-bold tracking-wider inline-block min-w-[38px] text-center ${
                           charGridBgMode === "AUTO"
                             ? "text-[#00ffcc]"
                             : charGridBgMode === "WHITE"
