@@ -48,11 +48,17 @@ export interface AppData {
   logoSet: string[];
   adminPin?: string;
   globalUnitScale?: number;
+  charGridScale?: number;
+  charGridBgMode?: "AUTO" | "BLACK" | "WHITE";
+  charGridPaddingY?: number;
 }
 
 export const defaultAppData: AppData = {
   adminPin: "0000",
   globalUnitScale: 100,
+  charGridScale: 100,
+  charGridBgMode: "AUTO",
+  charGridPaddingY: 18,
   units: [
     {
       name: "ROBOTMAN-ORIGIN",
@@ -340,6 +346,9 @@ export function loadInitialData(): AppData {
             motCategories: (parsed.motCategories && Array.isArray(parsed.motCategories) && parsed.motCategories.length > 0) ? parsed.motCategories : defaultAppData.motCategories,
             adminPin: (parsed.adminPin && typeof parsed.adminPin === "string" && parsed.adminPin.length === 4) ? parsed.adminPin : (defaultAppData.adminPin || "0000"),
             globalUnitScale: typeof parsed.globalUnitScale === "number" ? parsed.globalUnitScale : 100,
+            charGridScale: typeof parsed.charGridScale === "number" ? parsed.charGridScale : 100,
+            charGridBgMode: (parsed.charGridBgMode === "AUTO" || parsed.charGridBgMode === "BLACK" || parsed.charGridBgMode === "WHITE") ? parsed.charGridBgMode : "AUTO",
+            charGridPaddingY: typeof parsed.charGridPaddingY === "number" ? parsed.charGridPaddingY : 18,
           };
         }
       }

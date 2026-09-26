@@ -38,7 +38,9 @@ async function startServer() {
 
   app.post('/api/update_data', async (req, res) => {
     try {
-      await saveData(req.body);
+      const current = await loadData();
+      const updated = { ...current, ...req.body };
+      await saveData(updated);
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ error: 'Failed to save data' });

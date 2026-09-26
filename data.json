@@ -264,5 +264,6 @@
   "logoSet": [
     "imageSSS.png"
   ],
-  "globalUnitScale": 100
+  "globalUnitScale": 100,
+  "charGridScale": 100
 }

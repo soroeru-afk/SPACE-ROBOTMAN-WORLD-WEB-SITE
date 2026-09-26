@@ -3,13 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { usePWAInstall } from "./usePWAInstall";
-import { PWAInstallButton } from "./components/PWAInstallButton";
-import { OfflineIndicator } from "./components/OfflineIndicator";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { ChevronLeft, ChevronRight, LayoutGrid, List, Monitor, Search, Shield, Zap, Cpu, Activity, Sparkles, ExternalLink, Maximize2, Minimize2, Download, Upload, FileJson, Check, AlertCircle, RefreshCw, Copy, Database, Lock, Key, Delete } from "lucide-react";
 import { loadInitialData, saveToLocalData, defaultAppData } from "./defaultData";
 import { loadAppDataFromIndexedDB, readFileAsDataURL } from "./idbStorage";
+import { OfflineIndicator } from "./components/OfflineIndicator";
 
 const TypewriterLine = ({ text }: { text: string }) => {
   const [displayed, setDisplayed] = useState("");
@@ -136,21 +134,7 @@ const mergeUnitScales = (loadedUnits: any[]): any[] => {
 };
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState("splash");
-
-  // Synchronize browser/PWA header color (meta theme-color) dynamically per screen
-  useEffect(() => {
-    let meta = document.querySelector('meta[name="theme-color"]');
-    if (!meta) {
-      meta = document.createElement('meta');
-      meta.setAttribute('name', 'theme-color');
-      document.head.appendChild(meta);
-    }
-    // #000000 for intro/boot/admin, #121212 for main dashboard
-    const targetColor = (currentScreen === "dash") ? "#121212" : "#000000";
-    meta.setAttribute('content', targetColor);
-  }, [currentScreen]);
- // splash, story, boot, dash, admin
+  const [currentScreen, setCurrentScreen] = useState("splash"); // splash, story, boot, dash, admin
   const [currentLang, setCurrentLang] = useState("JP");
   const [currentNav, setCurrentNav] = useState("HOME");
   const [currentAdminTab, setCurrentAdminTab] = useState("ART");
@@ -179,6 +163,147 @@ export default function App() {
     }
     return 100;
   });
+
+  // Archive Gallery grid scale (persisted via localStorage, IndexedDB, and server sync)
+  const [charGridScale, setCharGridScale] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("space_robotman_char_grid_scale");
+      if (saved) {
+        const num = Number(saved);
+        if (!isNaN(num) && num >= 50 && num <= 200) return num;
+      }
+    } catch (e) {}
+    if (typeof initialCachedData.charGridScale === "number" && !isNaN(initialCachedData.charGridScale)) {
+      return initialCachedData.charGridScale;
+    }
+    return 100;
+  });
+
+  const updateCharGridScale = (newScale: number) => {
+    const clamped = Math.max(50, Math.min(200, Math.round(newScale)));
+    setCharGridScale(clamped);
+    try {
+      localStorage.setItem("space_robotman_char_grid_scale", clamped.toString());
+    } catch (e) {}
+    saveToLocalData({ charGridScale: clamped });
+    fetch("/api/update_data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ charGridScale: clamped }),
+    }).catch(() => {});
+  };
+
+  // Archive Gallery grid image background mode: "AUTO" | "BLACK" | "WHITE"
+  const [charGridBgMode, setCharGridBgMode] = useState<"AUTO" | "BLACK" | "WHITE">(() => {
+    try {
+      const saved = localStorage.getItem("space_robotman_char_grid_bg_mode");
+      if (saved === "AUTO" || saved === "BLACK" || saved === "WHITE") return saved;
+    } catch (e) {}
+    if (initialCachedData.charGridBgMode === "AUTO" || initialCachedData.charGridBgMode === "BLACK" || initialCachedData.charGridBgMode === "WHITE") {
+      return initialCachedData.charGridBgMode;
+    }
+    return "AUTO";
+  });
+
+  const updateCharGridBgMode = (mode: "AUTO" | "BLACK" | "WHITE") => {
+    setCharGridBgMode(mode);
+    try {
+      localStorage.setItem("space_robotman_char_grid_bg_mode", mode);
+    } catch (e) {}
+    saveToLocalData({ charGridBgMode: mode });
+    fetch("/api/update_data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ charGridBgMode: mode }),
+    }).catch(() => {});
+  };
+
+  // Archive Gallery grid image vertical padding / spacing (px): 4 to 60px, default 18px
+  const [charGridPaddingY, setCharGridPaddingY] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("space_robotman_char_grid_padding_y");
+      if (saved) {
+        const num = Number(saved);
+        if (!isNaN(num) && num >= 4 && num <= 60) return num;
+      }
+    } catch (e) {}
+    if (typeof initialCachedData.charGridPaddingY === "number" && !isNaN(initialCachedData.charGridPaddingY)) {
+      return initialCachedData.charGridPaddingY;
+    }
+    return 18;
+  });
+
+  const updateCharGridPaddingY = (newPad: number) => {
+    const clamped = Math.max(4, Math.min(60, Math.round(newPad)));
+    setCharGridPaddingY(clamped);
+    try {
+      localStorage.setItem("space_robotman_char_grid_padding_y", clamped.toString());
+    } catch (e) {}
+    saveToLocalData({ charGridPaddingY: clamped });
+    fetch("/api/update_data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ charGridPaddingY: clamped }),
+    }).catch(() => {});
+  };
+
+  // Cache of detected background colors for each unit image in AUTO mode
+  const [detectedBgColors, setDetectedBgColors] = useState<Record<string, string>>({});
+
+  const sampleImageBgColor = (fileUrl: string, imgEl: HTMLImageElement) => {
+    if (!fileUrl || detectedBgColors[fileUrl]) return;
+    try {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+      const w = 32;
+      const h = 32;
+      canvas.width = w;
+      canvas.height = h;
+      ctx.drawImage(imgEl, 0, 0, w, h);
+      const data = ctx.getImageData(0, 0, w, h).data;
+      
+      const samples = [
+        [0, 0], [w - 1, 0], [0, h - 1], [w - 1, h - 1],
+        [Math.floor(w / 2), 0], [Math.floor(w / 2), h - 1],
+        [0, Math.floor(h / 2)], [w - 1, Math.floor(h / 2)]
+      ];
+      let rSum = 0, gSum = 0, bSum = 0, valid = 0, transparent = 0;
+      for (const [x, y] of samples) {
+        const idx = (y * w + x) * 4;
+        const a = data[idx + 3];
+        if (a < 35) {
+          transparent++;
+          continue;
+        }
+        rSum += data[idx];
+        gSum += data[idx + 1];
+        bSum += data[idx + 2];
+        valid++;
+      }
+
+      let detected = "#0c0c0c";
+      if (transparent > samples.length / 2) {
+        // Transparent PNG: blend into neutral dark container
+        detected = "#0e0e0e";
+      } else if (valid > 0) {
+        const avgR = Math.round(rSum / valid);
+        const avgG = Math.round(gSum / valid);
+        const avgB = Math.round(bSum / valid);
+        const brightness = 0.299 * avgR + 0.587 * avgG + 0.114 * avgB;
+        if (brightness > 215) {
+          detected = "#ffffff";
+        } else if (brightness < 30) {
+          detected = "#050505";
+        } else {
+          detected = `rgb(${avgR},${avgG},${avgB})`;
+        }
+      }
+      setDetectedBgColors((prev) => ({ ...prev, [fileUrl]: detected }));
+    } catch (e) {
+      setDetectedBgColors((prev) => ({ ...prev, [fileUrl]: "#0c0c0c" }));
+    }
+  };
   // Sidebar "OPENING TOP" 4-second auto-reverting confirmation state (Emerald Green)
   const [openingTopCountdown, setOpeningTopCountdown] = useState<number | null>(null);
   const openingTopTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -209,6 +334,18 @@ export default function App() {
       if (openingTopTimerRef.current) clearInterval(openingTopTimerRef.current);
     };
   }, []);
+
+  // Synchronize browser/PWA header color (meta theme-color) dynamically per screen
+  useEffect(() => {
+    let meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute('name', 'theme-color');
+      document.head.appendChild(meta);
+    }
+    const targetColor = (currentScreen === "dash") ? "#121212" : "#000000";
+    meta.setAttribute('content', targetColor);
+  }, [currentScreen]);
 
   const [units, setUnits] = useState<any[]>(() => {
     const base = (initialCachedData.units && initialCachedData.units.length > 0) ? initialCachedData.units : defaultAppData.units;
@@ -328,6 +465,12 @@ export default function App() {
         if (typeof idbData.globalUnitScale === "number" && !isNaN(idbData.globalUnitScale)) {
           setGlobalUnitScale(idbData.globalUnitScale);
         }
+        if (typeof idbData.charGridScale === "number" && !isNaN(idbData.charGridScale)) {
+          setCharGridScale(idbData.charGridScale);
+        }
+        if (typeof idbData.charGridPaddingY === "number" && !isNaN(idbData.charGridPaddingY)) {
+          setCharGridPaddingY(idbData.charGridPaddingY);
+        }
       }
     }).catch(() => {});
 
@@ -402,6 +545,12 @@ export default function App() {
           }
           if (typeof data.globalUnitScale === "number" && !isNaN(data.globalUnitScale)) {
             setGlobalUnitScale(data.globalUnitScale);
+          }
+          if (typeof data.charGridScale === "number" && !isNaN(data.charGridScale)) {
+            setCharGridScale(data.charGridScale);
+          }
+          if (typeof data.charGridPaddingY === "number" && !isNaN(data.charGridPaddingY)) {
+            setCharGridPaddingY(data.charGridPaddingY);
           }
           saveToLocalData(data);
         }
@@ -741,6 +890,135 @@ export default function App() {
             </div>
 
             <div className="h-5 w-[1px] bg-[#2e2e2e]"></div>
+
+            {/* Grid View Controls (when in GRID mode) - Upper slider & Background selector */}
+            {charViewMode === "GRID" && (
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                {/* Scale Slider */}
+                <div className="flex items-center gap-1.5 bg-[#161616] border border-[#2e2e2e] px-2 py-0.5" title="機体画像全体の表示倍率（縦横比は一定）">
+                  <span className="text-[9px] text-[#777] font-mono tracking-wider uppercase shrink-0">
+                    SCALE:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => updateCharGridScale(charGridScale - 5)}
+                    className="w-4 h-4 flex items-center justify-center text-[10px] text-[#888] hover:text-white bg-[#222] hover:bg-[#333] border border-[#3a3a3a] cursor-pointer"
+                    title="5% 縮小"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="range"
+                    min={60}
+                    max={160}
+                    step={5}
+                    value={charGridScale}
+                    onChange={(e) => updateCharGridScale(Number(e.target.value))}
+                    className="w-14 sm:w-20 accent-white h-1.5 bg-[#262626] cursor-pointer"
+                    title={`グリッド画像表示倍率: ${charGridScale}%`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => updateCharGridScale(charGridScale + 5)}
+                    className="w-4 h-4 flex items-center justify-center text-[10px] text-[#888] hover:text-white bg-[#222] hover:bg-[#333] border border-[#3a3a3a] cursor-pointer"
+                    title="5% 拡大"
+                  >
+                    +
+                  </button>
+                  <span className="font-mono text-[10px] text-white font-bold min-w-[32px] text-right shrink-0">
+                    {charGridScale}%
+                  </span>
+                  {charGridScale !== 100 && (
+                    <button
+                      type="button"
+                      onClick={() => updateCharGridScale(100)}
+                      className="text-[8px] font-mono text-[#888] hover:text-white underline ml-0.5 cursor-pointer"
+                      title="標準(100%)に戻す"
+                    >
+                      RST
+                    </button>
+                  )}
+                </div>
+
+                {/* Vertical Spacing / Padding Slider (上下の空間幅・パディング調整) */}
+                <div className="flex items-center gap-1.5 bg-[#161616] border border-[#2e2e2e] px-2 py-0.5" title="機体画像カード内の上下余白（空間幅）を調整">
+                  <span className="text-[9px] text-[#777] font-mono tracking-wider uppercase shrink-0">
+                    V-PAD:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => updateCharGridPaddingY(charGridPaddingY - 2)}
+                    className="w-4 h-4 flex items-center justify-center text-[10px] text-[#888] hover:text-white bg-[#222] hover:bg-[#333] border border-[#3a3a3a] cursor-pointer"
+                    title="上下余白を2px縮小"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="range"
+                    min={4}
+                    max={48}
+                    step={2}
+                    value={charGridPaddingY}
+                    onChange={(e) => updateCharGridPaddingY(Number(e.target.value))}
+                    className="w-12 sm:w-16 accent-white h-1.5 bg-[#262626] cursor-pointer"
+                    title={`上下余白幅: ${charGridPaddingY}px`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => updateCharGridPaddingY(charGridPaddingY + 2)}
+                    className="w-4 h-4 flex items-center justify-center text-[10px] text-[#888] hover:text-white bg-[#222] hover:bg-[#333] border border-[#3a3a3a] cursor-pointer"
+                    title="上下余白を2px拡大"
+                  >
+                    +
+                  </button>
+                  <span className="font-mono text-[10px] text-white font-bold min-w-[28px] text-right shrink-0">
+                    {charGridPaddingY}px
+                  </span>
+                  {charGridPaddingY !== 18 && (
+                    <button
+                      type="button"
+                      onClick={() => updateCharGridPaddingY(18)}
+                      className="text-[8px] font-mono text-[#888] hover:text-white underline ml-0.5 cursor-pointer"
+                      title="標準(18px)に戻す"
+                    >
+                      RST
+                    </button>
+                  )}
+                </div>
+
+                {/* Background Mode Selector */}
+                <div className="flex items-center gap-1 bg-[#161616] border border-[#2e2e2e] p-0.5">
+                  <span className="text-[9px] text-[#777] font-mono tracking-wider px-1.5 uppercase">
+                    BG:
+                  </span>
+                  {(["AUTO", "BLACK", "WHITE"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => updateCharGridBgMode(mode)}
+                      className={`px-1.5 py-0.5 text-[9px] font-mono font-bold transition-all cursor-pointer ${
+                        charGridBgMode === mode
+                          ? mode === "WHITE"
+                            ? "bg-white text-black font-extrabold shadow-sm"
+                            : mode === "BLACK"
+                            ? "bg-black text-white border border-[#555] font-extrabold shadow-sm"
+                            : "bg-[#252525] text-[#00ffcc] border border-[#00ffcc]/40 font-extrabold shadow-sm"
+                          : "text-[#777] hover:text-[#bbb] hover:bg-[#222]"
+                      }`}
+                      title={
+                        mode === "AUTO"
+                          ? "AUTO: 画像に合わせて自動で背景色を同化（シームレスに結合）"
+                          : mode === "BLACK"
+                          ? "BLACK: 背景をブラック（黒）で固定"
+                          : "WHITE: 背景をホワイト（白）で固定"
+                      }
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* List View Scaling Controls (when in LIST mode) */}
             {charViewMode === "LIST" && (
@@ -1327,97 +1605,162 @@ export default function App() {
         {currentNav === "CHAR" && (
           <div id="char-well" className="w-full h-full p-4 flex flex-col min-h-0 bg-[#101010] relative overflow-hidden">
             {/* 1. GRID VIEW MODE */}
-            {charViewMode === "GRID" && (
-              <div className="w-full h-full flex flex-col min-h-0 relative z-10">
-                <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-[#262626] px-1 shrink-0">
-                  <div className="flex items-center gap-3">
-                    <span className="font-['Orbitron'] text-[12px] text-white tracking-widest font-bold">
-                      ARCHIVE GALLERY
-                    </span>
-                    <span className="text-[10px] text-[#888] font-mono">
-                      // {getFilteredUnits().length} UNITS CATALOGUED
-                    </span>
-                  </div>
-                  <div className="text-[9px] text-[#666] font-mono tracking-wider">
-                    SPECIFICATION ARCHIVE // SELECT CARD TO INSPECT
-                  </div>
-                </div>
+            {charViewMode === "GRID" && (() => {
+              const cardMinWidth = Math.max(160, Math.round(240 * (charGridScale / 100)));
+              const baseContentHeight = Math.round(180 * (charGridScale / 100));
+              const viewportHeight = Math.max(120, baseContentHeight + charGridPaddingY * 2);
 
-                <div className="flex-1 overflow-y-auto pr-2 pb-4">
-                  {getFilteredUnits().length === 0 ? (
-                    <div className="w-full h-64 flex flex-col items-center justify-center text-[#555] font-mono gap-2">
-                      <Search size={28} />
-                      <div className="font-['Orbitron'] tracking-widest text-[13px]">NO UNITS MATCH CRITERIA</div>
-                      <button 
-                        onClick={() => { setActiveCharFilter("ALL"); setCharSearchQuery(""); }}
-                        className="mech-btn !w-auto px-4 mt-2 !h-[26px]"
+              return (
+                <div className="w-full h-full flex flex-col min-h-0 relative z-10">
+                  <div className="flex flex-wrap items-center justify-between gap-3 pb-2.5 mb-3 border-b border-[#262626] px-1 shrink-0">
+                    <div className="flex items-center gap-3">
+                      <span className="font-['Orbitron'] text-[12px] text-white tracking-widest font-bold">
+                        ARCHIVE GALLERY
+                      </span>
+                      <span className="text-[10px] text-[#888] font-mono">
+                        // {getFilteredUnits().length} UNITS CATALOGUED
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 sm:gap-3 text-[9px] font-mono">
+                      <div className="flex items-center gap-1.5 bg-[#141414] border border-[#2a2a2a] px-2 py-0.5">
+                        <span className="text-[#666]">BG:</span>
+                        <span className={`font-bold tracking-wider ${
+                          charGridBgMode === "AUTO"
+                            ? "text-[#00ffcc]"
+                            : charGridBgMode === "WHITE"
+                            ? "text-white"
+                            : "text-[#bbb]"
+                        }`}>
+                          {charGridBgMode === "AUTO" ? "AUTO" : charGridBgMode}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-[#141414] border border-[#2a2a2a] px-2 py-0.5">
+                        <span className="text-[#666]">V-PAD:</span>
+                        <span className="font-bold text-white tracking-wider">
+                          {charGridPaddingY}px
+                        </span>
+                      </div>
+                      <span className="text-[#444] hidden md:inline">//</span>
+                      <span className="text-[#666] tracking-wider hidden md:inline">
+                        CLICK CARD TO INSPECT DETAIL
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto pr-2 pb-4">
+                    {getFilteredUnits().length === 0 ? (
+                      <div className="w-full h-64 flex flex-col items-center justify-center text-[#555] font-mono gap-2">
+                        <Search size={28} />
+                        <div className="font-['Orbitron'] tracking-widest text-[13px]">NO UNITS MATCH CRITERIA</div>
+                        <button 
+                          onClick={() => { setActiveCharFilter("ALL"); setCharSearchQuery(""); }}
+                          className="mech-btn !w-auto px-4 mt-2 !h-[26px]"
+                        >
+                          <span>RESET FILTERS</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        className="grid gap-3"
+                        style={{
+                          gridTemplateColumns: `repeat(auto-fill, minmax(${cardMinWidth}px, 1fr))`,
+                        }}
                       >
-                        <span>RESET FILTERS</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-                      {getFilteredUnits().map((u: any, i: number) => {
-                        const stats = getUnitStats(u.name);
-                        return (
-                          <div
-                            key={i}
-                            onClick={() => {
-                              setSelectedChar(u);
-                              setCharViewMode("DETAIL");
-                            }}
-                            className="group relative bg-[#161616] hover:bg-[#1c1c1c] border border-[#2a2a2a] hover:border-[#555] cursor-pointer transition-all duration-200 p-3 flex flex-col shadow-sm"
-                          >
-                            {/* Card Header */}
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-[9px] font-mono text-[#aaa] tracking-widest bg-[#1f1f1f] px-2 py-0.5 border border-[#333]">
-                                {u.faction || "UNIT"}
-                              </span>
-                              <div className="flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 bg-[#666] group-hover:bg-white transition-colors"></span>
-                                <span className="text-[8px] text-[#666] font-mono">ACT</span>
+                        {getFilteredUnits().map((u: any, i: number) => {
+                          const stats = getUnitStats(u.name);
+                          const cardBgColor = charGridBgMode === "WHITE"
+                            ? "#ffffff"
+                            : charGridBgMode === "BLACK"
+                            ? "#050505"
+                            : (detectedBgColors[u.file] || "#0c0c0c");
+
+                          const isCardBgLight = cardBgColor === "#ffffff" || (() => {
+                            const match = cardBgColor.match(/\d+/g);
+                            if (match && match.length >= 3) {
+                              return (0.299 * Number(match[0]) + 0.587 * Number(match[1]) + 0.114 * Number(match[2])) > 170;
+                            }
+                            return false;
+                          })();
+
+                          return (
+                            <div
+                              key={i}
+                              onClick={() => {
+                                setSelectedChar(u);
+                                setCharViewMode("DETAIL");
+                              }}
+                              className="group relative bg-[#161616] hover:bg-[#1c1c1c] border border-[#2a2a2a] hover:border-[#555] cursor-pointer transition-all duration-200 p-3 flex flex-col shadow-sm"
+                            >
+                              {/* Card Header */}
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-[9px] font-mono text-[#aaa] tracking-widest bg-[#1f1f1f] px-2 py-0.5 border border-[#333]">
+                                  {u.faction || "UNIT"}
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 bg-[#666] group-hover:bg-white transition-colors"></span>
+                                  <span className="text-[8px] text-[#666] font-mono">ACT</span>
+                                </div>
+                              </div>
+
+                              {/* Card Image Viewport - Seamless Background Adaptation, Vertical Spacing & Aspect Ratio Preserved */}
+                              <div
+                                className="relative w-full overflow-hidden flex items-center justify-center mb-2.5 group-hover:border-[#555] transition-all duration-200"
+                                style={{
+                                  height: `${viewportHeight}px`,
+                                  paddingTop: `${charGridPaddingY}px`,
+                                  paddingBottom: `${charGridPaddingY}px`,
+                                  paddingLeft: "12px",
+                                  paddingRight: "12px",
+                                  backgroundColor: cardBgColor,
+                                  border: `1px solid ${isCardBgLight ? "#2a2a2a" : "#222"}`,
+                                }}
+                              >
+                                {/* Square Technical Corner Markings */}
+                                <div className={`absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l ${isCardBgLight ? "border-[#888]" : "border-[#444]"}`}></div>
+                                <div className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 border-t border-r ${isCardBgLight ? "border-[#888]" : "border-[#444]"}`}></div>
+                                <div className={`absolute bottom-1.5 left-1.5 w-1.5 h-1.5 border-b border-l ${isCardBgLight ? "border-[#888]" : "border-[#444]"}`}></div>
+                                <div className={`absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r ${isCardBgLight ? "border-[#888]" : "border-[#444]"}`}></div>
+
+                                <img
+                                  src={u.file}
+                                  alt={u.name}
+                                  crossOrigin="anonymous"
+                                  onLoad={(e) => sampleImageBgColor(u.file, e.currentTarget)}
+                                  className="max-h-full max-w-full object-contain filter drop-shadow-md group-hover:scale-102 transition-transform duration-200"
+                                  style={{
+                                    maxHeight: "100%",
+                                    maxWidth: "100%",
+                                    objectFit: "contain",
+                                  }}
+                                />
+                              </div>
+
+                              {/* Card Info */}
+                              <div className="flex flex-col">
+                                <div className="font-['Orbitron'] text-[13px] text-white font-bold tracking-wider truncate mb-0.5 group-hover:text-white">
+                                  {u.name}
+                                </div>
+                                <div className="text-[10px] text-[#777] font-mono tracking-wide truncate mb-2">
+                                  {u.role || "--"}
+                                </div>
+                                
+                                {/* Mini Stat preview - industrial muted bars */}
+                                <div className="w-full bg-[#101010] border border-[#222] p-1.5 flex items-center justify-between text-[9px] font-mono text-[#888]">
+                                  <span>PWR {stats.power}%</span>
+                                  <span>ARM {stats.armor}%</span>
+                                  <span>SPD {stats.speed}%</span>
+                                </div>
                               </div>
                             </div>
-
-                            {/* Card Image Viewport */}
-                            <div className="relative w-full h-[180px] bg-[#0c0c0c] border border-[#222] overflow-hidden flex items-center justify-center p-3 mb-2.5 group-hover:border-[#383838] transition-colors">
-                              {/* Square Technical Corner Markings */}
-                              <div className="absolute top-1 left-1 w-1.5 h-1.5 border-t border-l border-[#444]"></div>
-                              <div className="absolute top-1 right-1 w-1.5 h-1.5 border-t border-r border-[#444]"></div>
-                              <div className="absolute bottom-1 left-1 w-1.5 h-1.5 border-b border-l border-[#444]"></div>
-                              <div className="absolute bottom-1 right-1 w-1.5 h-1.5 border-b border-r border-[#444]"></div>
-
-                              <img
-                                src={u.file}
-                                alt={u.name}
-                                className="max-h-full max-w-full object-contain filter drop-shadow-md group-hover:scale-102 transition-transform duration-200"
-                              />
-                            </div>
-
-                            {/* Card Info */}
-                            <div className="flex flex-col">
-                              <div className="font-['Orbitron'] text-[13px] text-white font-bold tracking-wider truncate mb-0.5 group-hover:text-white">
-                                {u.name}
-                              </div>
-                              <div className="text-[10px] text-[#777] font-mono tracking-wide truncate mb-2">
-                                {u.role || "--"}
-                              </div>
-                              
-                              {/* Mini Stat preview - industrial muted bars */}
-                              <div className="w-full bg-[#101010] border border-[#222] p-1.5 flex items-center justify-between text-[9px] font-mono text-[#888]">
-                                <span>PWR {stats.power}%</span>
-                                <span>ARM {stats.armor}%</span>
-                                <span>SPD {stats.speed}%</span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* 2. LIST VIEW MODE */}
             {charViewMode === "LIST" && (() => {
@@ -2372,6 +2715,9 @@ export default function App() {
       motCategoryMap,
       systemLogo: systemLogo || DEFAULT_SYSTEM_LOGO,
       globalUnitScale: globalUnitScale || 100,
+      charGridScale: charGridScale || 100,
+      charGridBgMode: charGridBgMode || "AUTO",
+      charGridPaddingY: charGridPaddingY || 18,
     };
   };
 
@@ -2512,6 +2858,15 @@ export default function App() {
       if (typeof dataToApply.globalUnitScale === "number" && !isNaN(dataToApply.globalUnitScale)) {
         setGlobalUnitScale(dataToApply.globalUnitScale);
       }
+      if (typeof dataToApply.charGridScale === "number" && !isNaN(dataToApply.charGridScale)) {
+        setCharGridScale(dataToApply.charGridScale);
+      }
+      if (dataToApply.charGridBgMode === "AUTO" || dataToApply.charGridBgMode === "BLACK" || dataToApply.charGridBgMode === "WHITE") {
+        setCharGridBgMode(dataToApply.charGridBgMode);
+      }
+      if (typeof dataToApply.charGridPaddingY === "number" && !isNaN(dataToApply.charGridPaddingY)) {
+        setCharGridPaddingY(dataToApply.charGridPaddingY);
+      }
       if (dataToApply.adminPin && typeof dataToApply.adminPin === "string" && dataToApply.adminPin.length === 4) {
         setAdminPin(dataToApply.adminPin);
         try {
@@ -2585,6 +2940,7 @@ export default function App() {
         systemLogo: effectiveSystemLogo,
         logoSet: effectiveLogoSet,
         globalUnitScale: payloadToSave?.globalUnitScale !== undefined ? payloadToSave.globalUnitScale : globalUnitScale,
+        charGridScale: payloadToSave?.charGridScale !== undefined ? payloadToSave.charGridScale : charGridScale,
       };
       saveToLocalData(payload);
       const res = await fetch("/api/update_data", {
@@ -3771,6 +4127,119 @@ export default function App() {
                       >
                         <span className="text-[10px]">UPDATE</span>
                       </button>
+                    </div>
+
+                    {/* ARCHIVE GALLERY GRID SCALE SLIDER (ギャラリー表示一括倍率) */}
+                    <div className="border-t border-[#262626] pt-2.5 mt-2 flex flex-col gap-2 bg-[#0d0d0d] p-2.5 border border-[#222]">
+                      <div className="flex items-center justify-between text-[9px] font-mono text-[#888]">
+                        <span className="text-[#eee] font-bold">ARCHIVE GALLERY GRID SCALE (ギャラリー画像倍率)</span>
+                        <span className="text-white font-bold bg-[#181818] px-1.5 py-0.5 border border-[#333]">
+                          {charGridScale}%
+                        </span>
+                      </div>
+                      <div className="text-[8px] font-mono text-[#666]">
+                        アーカイブギャラリー（GRID表示）の画像比率を保ったまま、全機体のカードサイズを一括調整できます。
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={60}
+                          max={160}
+                          step={5}
+                          value={charGridScale}
+                          onChange={(e) => updateCharGridScale(Number(e.target.value))}
+                          className="flex-1 accent-white h-1.5 bg-[#222] cursor-pointer"
+                        />
+                        <div className="flex items-center gap-1">
+                          {([75, 100, 125, 150] as const).map((p) => (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => updateCharGridScale(p)}
+                              className={`px-1.5 py-0.5 text-[8px] font-mono border transition-colors ${
+                                charGridScale === p
+                                  ? "border-white bg-white text-black font-bold"
+                                  : "border-[#333] text-[#777] hover:text-white hover:border-[#555]"
+                              }`}
+                            >
+                              {p}%
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ARCHIVE GALLERY IMAGE BACKGROUND MODE */}
+                    <div className="border-t border-[#262626] pt-2.5 mt-2 flex flex-col gap-2 bg-[#0d0d0d] p-2.5 border border-[#222]">
+                      <div className="flex items-center justify-between text-[9px] font-mono text-[#888]">
+                        <span className="text-[#eee] font-bold">GALLERY IMAGE BACKGROUND (ギャラリー画像背景色)</span>
+                        <span className="text-white font-bold bg-[#181818] px-1.5 py-0.5 border border-[#333]">
+                          {charGridBgMode}
+                        </span>
+                      </div>
+                      <div className="text-[8px] font-mono text-[#666]">
+                        機体画像枠の背景色。AUTO（自動検出）は画像の外周色に合わせてシームレスに背景と同化（結合）させます。
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {(["AUTO", "BLACK", "WHITE"] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => updateCharGridBgMode(mode)}
+                            className={`flex-1 py-1 text-[10px] font-mono font-bold border transition-colors cursor-pointer ${
+                              charGridBgMode === mode
+                                ? mode === "WHITE"
+                                  ? "border-white bg-white text-black font-extrabold"
+                                  : mode === "BLACK"
+                                  ? "border-white bg-[#000] text-white font-extrabold"
+                                  : "border-[#00ffcc] bg-[#222] text-[#00ffcc] font-extrabold"
+                                : "border-[#333] text-[#777] hover:text-white hover:border-[#555] bg-[#161616]"
+                            }`}
+                          >
+                            {mode === "AUTO" ? "AUTO (自動検出)" : mode === "BLACK" ? "BLACK (黒)" : "WHITE (白)"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* ARCHIVE GALLERY IMAGE VERTICAL PADDING (上下空間幅・パディング) */}
+                    <div className="border-t border-[#262626] pt-2.5 mt-2 flex flex-col gap-2 bg-[#0d0d0d] p-2.5 border border-[#222]">
+                      <div className="flex items-center justify-between text-[9px] font-mono text-[#888]">
+                        <span className="text-[#eee] font-bold">GALLERY VERTICAL PADDING (上下パディング・空間幅)</span>
+                        <span className="text-white font-bold bg-[#181818] px-1.5 py-0.5 border border-[#333]">
+                          {charGridPaddingY}px
+                        </span>
+                      </div>
+                      <div className="text-[8px] font-mono text-[#666]">
+                        機体カード画像枠内の上下の余白（空間幅）を調整します。画像を大きくした際も頭部や足元が詰まらず、余裕のあるレイアウトにできます。
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={4}
+                          max={48}
+                          step={2}
+                          value={charGridPaddingY}
+                          onChange={(e) => updateCharGridPaddingY(Number(e.target.value))}
+                          className="flex-1 accent-white h-1.5 bg-[#222] cursor-pointer"
+                        />
+                        <div className="flex items-center gap-1">
+                          {([8, 14, 18, 26, 36] as const).map((p) => (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => updateCharGridPaddingY(p)}
+                              className={`px-1.5 py-0.5 text-[8px] font-mono border transition-colors ${
+                                charGridPaddingY === p
+                                  ? "border-white bg-white text-black font-bold"
+                                  : "border-[#333] text-[#777] hover:text-white hover:border-[#555]"
+                              }`}
+                            >
+                              {p}px
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
 
                     {/* GLOBAL UNIT SCALE SLIDER (全機体一括縮小/拡大) */}

@@ -18,8 +18,8 @@ export default defineConfig(({mode}) => {
           name: 'SPACE ROBOTMAN WORLD ARCHIVES',
           short_name: 'ROBOTMAN ARCHIVES',
           description: 'SPACE ROBOTMAN WORLD Official PWA Archives Application',
-          theme_color: '#0a0d12',
-          background_color: '#0a0d12',
+          theme_color: '#000000',
+          background_color: '#000000',
           display: 'standalone',
           orientation: 'any',
           scope: './',
@@ -45,13 +45,9 @@ export default defineConfig(({mode}) => {
         },
         workbox: {
           maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
-          globPatterns: ['**/*.{js,css,html,ico,png,jpg,svg,mp4,json}'],
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,mp4,json}'],
         },
-        devOptions: {
-          enabled: true,
-          type: 'module',
-        },
-      }),
+      })
     ],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
@@ -62,6 +58,8 @@ export default defineConfig(({mode}) => {
       },
     },
     server: {
+      // HMR is disabled in AI Studio via DISABLE_HMR env var.
+      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
     },
   };
